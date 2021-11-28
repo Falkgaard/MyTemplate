@@ -52,7 +52,10 @@ int f( int n ) {
 */
 
 int main() {
-	spdlog::info( "Starting MyTemplate..." );
+	spdlog::info(
+		"Starting MyTemplate v{}.{}.{}...",
+		MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH
+	);
 	spdlog::info( "Creating window..." );
 	if ( not glfwInit() ) {
 		spdlog::critical( "Unable to initialize GLFW!" );
@@ -82,9 +85,9 @@ int main() {
 		vk::raii::Context   context  {};
 		vk::ApplicationInfo app_info {
 			.pApplicationName   = "MyTemplate App",
-			.applicationVersion =  1,
+			.applicationVersion =  VK_MAKE_VERSION( MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH ),
 			.pEngineName        = "MyTemplate Engine",
-			.engineVersion      =  1,
+			.engineVersion      =  VK_MAKE_VERSION( MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH ),
 			.apiVersion         =  VK_API_VERSION_1_2
 		};
 		vk::InstanceCreateInfo instance_create_info {

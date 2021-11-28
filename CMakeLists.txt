@@ -7,7 +7,7 @@ endif ()
 # Configure project name and version here:
 project (
 	MyTemplate    # <- project name
-	VERSION       0.1
+	VERSION       0.1.0
 	DESCRIPTION   "A project template."
 	LANGUAGES     CXX
 )
@@ -16,6 +16,7 @@ configure_file ( # for exporting info to C++ (e.g. project version)
 	"${CMAKE_CURRENT_SOURCE_DIR}/src/info.hh.in"
 	"${CMAKE_CURRENT_SOURCE_DIR}/src/info.hh"
 )
+
 set          ( CMAKE_EXPORT_COMPILE_COMMANDS       ON ) # generate compile_commands.json
 set          ( CMAKE_POSITION_INDEPENDENT_CODE     ON ) # -fPIC
 set          ( CMAKE_INTERPROCEDURAL_OPTIMIZATION  ON )
