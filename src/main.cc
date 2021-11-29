@@ -12,12 +12,13 @@
 #define  GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #define  VULKAN_HPP_NO_CONSTRUCTORS
-//#include "vulkan/vulkan.hpp"
+#include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_raii.hpp"
 
 #include <iostream>
-#include <cstdio>
 #include <cstdlib>
+#include <cstdio>
+#include <cstring>
 #include <cstdint>
 #include <cinttypes>
 
@@ -33,6 +34,14 @@ using i64 = std::int64_t;
 
 using f32 = float;
 using f64 = double;
+
+bool constexpr is_debug_mode {
+	#if !defined( NDEBUG )
+		true
+	#else
+		false
+	#endif
+};
 
 /*
 int f( int n ) {
@@ -50,12 +59,55 @@ int f( int n ) {
 	return result;
 }
 */
+//namespace { // unnamed namespace for file scope
+	std::array const required_validation_layers {
+		"VK_LAYER_LUNARG_standard_validation" // TODO: add more, make customization point
+	};
+	
+	void
+	enableValidationLayers( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
+		noexcept( not is_debug_mode )
+	{
+		if constexpr ( is_debug_mode ) { // logic is only required for debug builds
+			auto const available_validation_layers { context.enumerateInstanceLayerProperties() };
+			// print required and available layers:
+			for ( auto const &layer : required_validation_layers )
+				spdlog::info( "Required layer: `{}`", layer );
+			for ( auto const &layer : available_validation_layers )
+				spdlog::info( "Available layer: `{}`", layer.layerName );
+			bool is_missing_layer { false };
+			// ensure required layers are available:
+			for ( auto const &target : required_validation_layers ) {
+				bool match_found { false };
+				for ( auto const &layer : available_validation_layers ) {
+					if ( std::strcmp( target, layer.layerName ) != 0 ) {
+						match_found = true;
+						break;
+					}
+				}
+				if ( not match_found ) {
+					is_missing_layer = true;
+					spdlog::error( "Missing layer: `{}`!", target );
+				}
+			}
+			// handle success or failure:
+			if ( is_missing_layer )
+				throw std::runtime_error( "Failed to load required validation layers!" );
+			else {
+				u32 const layer_count = static_cast<u32>( required_validation_layers.size() );
+				instance_create_info.enabledLayerCount   = layer_count;
+				instance_create_info.ppEnabledLayerNames = required_validation_layers.data();
+			}
+		}
+	} // end-of-function: enableValidationLayers
+//} // end-of-namespace: <unnamed>
 
 int main() {
 	spdlog::info(
 		"Starting MyTemplate v{}.{}.{}...",
 		MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH
 	);
+	
 	spdlog::info( "Creating window..." );
 	if ( not glfwInit() ) {
 		spdlog::critical( "Unable to initialize GLFW!" );
@@ -70,32 +122,45 @@ int main() {
 	glfwDefaultWindowHints();
 	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
 	
-	u32  ext_count;
-	auto ext_array = glfwGetRequiredInstanceExtensions( &ext_count );
-	if ( not ext_array ) {
-		spdlog::critical( "Unable to get Vulkan extensions!" );
-		abort();
-	}
-	
-	for ( i32 i=0; i<ext_count; ++i ) {
-		spdlog::info( "Required extension: {}", ext_array[i] );
-	}
-	
 	try {
+		// TODO: split engine/app versions and make customization point
+		auto const version {
+			VK_MAKE_VERSION(
+				MYTEMPLATE_VERSION_MAJOR,
+				MYTEMPLATE_VERSION_MINOR,
+				MYTEMPLATE_VERSION_PATCH
+			)
+		};
 		vk::raii::Context   context  {};
 		vk::ApplicationInfo app_info {
-			.pApplicationName   = "MyTemplate App",
-			.applicationVersion =  VK_MAKE_VERSION( MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH ),
+			.pApplicationName   = "MyTemplate App", // TODO: make customization point 
+			.applicationVersion =  version,         // TODO: make customization point 
 			.pEngineName        = "MyTemplate Engine",
-			.engineVersion      =  VK_MAKE_VERSION( MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH ),
-			.apiVersion         =  VK_API_VERSION_1_2
+			.engineVersion      =  version,
+			.apiVersion         =  VK_API_VERSION_1_1
 		};
+		
+		// vk::DebugUtilsMessengerCreateInfoEXT
+		
+		// TODO: wrap into enableExtensions?
+		u32  ext_count;
+		auto ext_array = glfwGetRequiredInstanceExtensions( &ext_count );
+		if ( not ext_array ) {
+			spdlog::critical( "Unable to get Vulkan extensions!" );
+			abort();
+		}
+		for ( i32 i=0; i<ext_count; ++i ) {
+			spdlog::info( "Required extension: {}", ext_array[i] );
+		}
+		
 		vk::InstanceCreateInfo instance_create_info {
 			.pApplicationInfo        = &app_info,
 			.enabledExtensionCount   =  ext_count,
 			.ppEnabledExtensionNames =  ext_array
 		};
+		enableValidationLayers( context, instance_create_info );
 		vk::raii::Instance instance( context, instance_create_info );
+		
 		#if !defined( NDEBUG )
 			 // TODO: vk::raii::DebugUtilsMessengerEXT debugUtilsMessenger
 		#endif
@@ -104,13 +169,14 @@ int main() {
 		// the big TODO
 ///////////////////////////////////////////////////////////////////////////////////////
 		vk::raii::PhysicalDevices physical_devices( instance ); // SUS
+		
 		auto surface   = vk::SurfaceKHR();                      // SUS
 		auto surface_c = static_cast<VkSurfaceKHR>( surface );  // SUS
-		auto *window_p = glfwCreateWindow( 640, 480, "MyTemplate", NULL, NULL );
+		auto *window_p = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr );
 		auto  result   = glfwCreateWindowSurface(               // SUS
-			*instance,
+			*instance,                                           // SUS
 			 window_p,
-			 NULL,
+			 nullptr,
 			&surface_c
 		);
 		if ( result != VkResult::VK_SUCCESS ) {
