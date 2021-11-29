@@ -59,7 +59,8 @@ int f( int n ) {
 	return result;
 }
 */
-//namespace { // unnamed namespace for file scope
+
+namespace { // unnamed namespace for file scope
 	std::array const required_validation_layers {
 		"VK_LAYER_LUNARG_standard_validation" // TODO: add more, make customization point
 	};
@@ -100,7 +101,23 @@ int f( int n ) {
 			}
 		}
 	} // end-of-function: enableValidationLayers
-//} // end-of-namespace: <unnamed>
+	
+	void
+	enableInstanceExtensions( vk::InstanceCreateInfo &instance_create_info )
+	{
+		u32  extension_count;
+		auto extension_data { glfwGetRequiredInstanceExtensions( &extension_count ) };
+		if ( not extension_data )
+			throw std::runtime_error( "Failed to get required Vulkan instance extensions!" );
+		else {
+			for ( i32 i=0; i<extension_count; ++i ) {
+				spdlog::info( "Required extension: {}", extension_data[i] );
+			}
+			instance_create_info.enabledExtensionCount   = extension_count;
+			instance_create_info.ppEnabledExtensionNames = extension_data;
+		}
+	} // end-of-function: enableInstanceExtensions
+} // end-of-namespace: <unnamed>
 
 int main() {
 	spdlog::info(
@@ -142,23 +159,9 @@ int main() {
 		
 		// vk::DebugUtilsMessengerCreateInfoEXT
 		
-		// TODO: wrap into enableExtensions?
-		u32  ext_count;
-		auto ext_array = glfwGetRequiredInstanceExtensions( &ext_count );
-		if ( not ext_array ) {
-			spdlog::critical( "Unable to get Vulkan extensions!" );
-			abort();
-		}
-		for ( i32 i=0; i<ext_count; ++i ) {
-			spdlog::info( "Required extension: {}", ext_array[i] );
-		}
-		
-		vk::InstanceCreateInfo instance_create_info {
-			.pApplicationInfo        = &app_info,
-			.enabledExtensionCount   =  ext_count,
-			.ppEnabledExtensionNames =  ext_array
-		};
+		vk::InstanceCreateInfo instance_create_info { .pApplicationInfo = &app_info };
 		enableValidationLayers( context, instance_create_info );
+		enableInstanceExtensions( instance_create_info );
 		vk::raii::Instance instance( context, instance_create_info );
 		
 		#if !defined( NDEBUG )
