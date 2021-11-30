@@ -255,7 +255,7 @@ int main() {
 	
 	if constexpr ( is_debug_mode ) {
 		spdlog::set_level( spdlog::level::debug );
-		spdlog::info( "Running DEBUG build" );
+		spdlog::info( "Running debug build..." );
 	}
 	
 	spdlog::info( "Creating window..." );
@@ -301,19 +301,19 @@ int main() {
 		vk::raii::Instance instance( context, instance_create_info );
 		
 		#if !defined( NDEBUG )
-			auto debug_messenger = createDebugMessenger( context, instance );
+			auto debug_messenger = createDebugMessenger( context, instance ); // TODO: rename
 		#endif
 		
 		// enumerate physical devices:
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
+		//vk::raii::PhysicalDevices physical_devices( instance );
 ///////////////////////////////////////////////////////////////////////////////////////
-		//vk::raii::PhysicalDevices physical_devices( instance ); // SUS
 		
-		auto  surface_tmp = VkSurfaceKHR {};
-		auto *window_p    = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr );
-		auto  result      = glfwCreateWindowSurface(               // SUS
-			*instance,                                           // SUS
+		VkSurfaceKHR surface_tmp;
+		auto *window_p = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr ); // TODO: RAII wrapper
+		auto  result   = glfwCreateWindowSurface(
+			*instance,
 			 window_p,
 			 nullptr,
 			&surface_tmp
@@ -335,7 +335,6 @@ int main() {
 		glfwDestroyWindow( window_p );
 		spdlog::info( "Terminating GLFW..." );
 		glfwTerminate();
-		std::exit(EXIT_SUCCESS);
 	}
 	catch ( vk::SystemError const &e ) {
 		spdlog::critical( "std::exception: {}", e.what() );
@@ -349,7 +348,9 @@ int main() {
 		spdlog::critical( "Unknown error encountered!" );
 		std::exit(EXIT_FAILURE);
 	}
-}
+	// exiting:
+	std::exit(EXIT_SUCCESS);
+} // end-of-function: main
 
 /*
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
