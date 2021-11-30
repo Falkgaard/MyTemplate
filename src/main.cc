@@ -62,7 +62,7 @@ int f( int n ) {
 
 namespace { // unnamed namespace for file scope
 	std::array const required_validation_layers {
-		"VK_LAYER_LUNARG_standard_validation" // TODO: add more, make customization point
+		"VK_LAYER_KHRONOS_validation"
 	};
 	
 	void
@@ -70,18 +70,19 @@ namespace { // unnamed namespace for file scope
 		noexcept( not is_debug_mode )
 	{
 		if constexpr ( is_debug_mode ) { // logic is only required for debug builds
+			spdlog::info( "Enabling validation layers..." );
 			auto const available_validation_layers { context.enumerateInstanceLayerProperties() };
 			// print required and available layers:
-			for ( auto const &layer : required_validation_layers )
-				spdlog::info( "Required layer: `{}`", layer );
-			for ( auto const &layer : available_validation_layers )
-				spdlog::info( "Available layer: `{}`", layer.layerName );
+			for ( auto const &e : required_validation_layers )
+				spdlog::info( "Required layer: `{}`", e );
+			for ( auto const &e : available_validation_layers )
+				spdlog::info( "Available layer: `{}`", e.layerName );
 			bool is_missing_layer { false };
 			// ensure required layers are available:
 			for ( auto const &target : required_validation_layers ) {
 				bool match_found { false };
 				for ( auto const &layer : available_validation_layers ) {
-					if ( std::strcmp( target, layer.layerName ) != 0 ) {
+					if ( std::strcmp( target, layer.layerName ) == 0 ) {
 						match_found = true;
 						break;
 					}
@@ -95,35 +96,139 @@ namespace { // unnamed namespace for file scope
 			if ( is_missing_layer )
 				throw std::runtime_error( "Failed to load required validation layers!" );
 			else {
-				u32 const layer_count = static_cast<u32>( required_validation_layers.size() );
-				instance_create_info.enabledLayerCount   = layer_count;
+				instance_create_info.enabledLayerCount   = static_cast<u32>( required_validation_layers.size() );
 				instance_create_info.ppEnabledLayerNames = required_validation_layers.data();
 			}
 		}
 	} // end-of-function: enableValidationLayers
 	
+	std::vector<char const *> required_extensions {
+		#if !defined( NDEBUG )
+			VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+		#endif
+	};
+	
 	void
 	enableInstanceExtensions( vk::InstanceCreateInfo &instance_create_info )
 	{
-		u32  extension_count;
-		auto extension_data { glfwGetRequiredInstanceExtensions( &extension_count ) };
-		if ( not extension_data )
+		spdlog::info( "Enabling instance extensions..." );
+		// get required GLFW extensions:
+		u32  glfw_extension_count;
+		auto glfw_extension_list { glfwGetRequiredInstanceExtensions( &glfw_extension_count ) };
+		if ( glfw_extension_list == nullptr )
 			throw std::runtime_error( "Failed to get required Vulkan instance extensions!" );
 		else {
-			for ( i32 i=0; i<extension_count; ++i ) {
-				spdlog::info( "Required extension: {}", extension_data[i] );
-			}
-			instance_create_info.enabledExtensionCount   = extension_count;
-			instance_create_info.ppEnabledExtensionNames = extension_data;
+			// add required GLFW extensions:
+			required_extensions.reserve( glfw_extension_count );
+			for ( i32 i=0; i<glfw_extension_count; ++i )
+				required_extensions.push_back( glfw_extension_list[i] );
+			
+			// log requirements:
+			for ( auto const &e : required_extensions )
+				spdlog::info( "Required extension: {}", e );
+			
+			// set create info fields:
+			instance_create_info.enabledExtensionCount   = static_cast<u32>( required_extensions.size() );
+			instance_create_info.ppEnabledExtensionNames = required_extensions.data();
 		}
 	} // end-of-function: enableInstanceExtensions
+	
+#if !defined( NDEBUG )
+	VKAPI_ATTR VkBool32 VKAPI_CALL
+	debugCallback(
+		VkDebugUtilsMessageSeverityFlagBitsEXT      severity_flags,
+		VkDebugUtilsMessageTypeFlagsEXT             type_flags,
+		VkDebugUtilsMessengerCallbackDataEXT const *callback_data_p,
+		void * // unused for now
+	)
+	{
+		// TODO: replace invocation duplication by using a function map?
+		auto const  msg_type {
+			vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(type_flags) )
+		};
+		auto const  msg_severity {
+			static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(severity_flags)
+		};
+		auto const  msg_id        { callback_data_p->messageIdNumber };
+		auto const &msg_id_name_p { callback_data_p->pMessageIdName  };
+		auto const &msg_p         { callback_data_p->pMessage        };
+		switch (msg_severity) {
+			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
+				spdlog::error( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+				break;
+			}
+			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
+				spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+				break;
+			}
+			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: find better fit?
+				spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+				break;
+			}
+			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
+				spdlog::warn( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+				break;
+			}
+		}
+		// TODO: expand with more info from callback_data_p
+		return false; // TODO: why?
+	} // end-of-function: debugCallback
+	
+	[[nodiscard]] auto
+	createDebugMessenger( vk::raii::Context &context, vk::raii::Instance &instance )
+	{
+		spdlog::info( "Creating debug messenger..." );
+		
+		auto properties = context.enumerateInstanceExtensionProperties();
+		
+		// look for debug utils extension:
+		auto search_result {
+			std::find_if(
+				std::begin( properties ),
+				std::end(   properties ),
+				[]( vk::ExtensionProperties const &p ) {
+					return std::strcmp( p.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME ) == 0;
+				}
+			)
+		};
+		if ( search_result == std::end( properties ) )
+			throw std::runtime_error( "Could not find " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " extension!" );
+		
+		auto const severity_flags = vk::DebugUtilsMessageSeverityFlagsEXT(
+			vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+			vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
+		);
+		
+		auto const type_flags = vk::DebugUtilsMessageTypeFlagsEXT(
+			vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral     |
+			vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+			vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
+		);
+		
+		auto const create_info = vk::DebugUtilsMessengerCreateInfoEXT {
+			.messageSeverity =  severity_flags,
+			.messageType     =  type_flags,
+			.pfnUserCallback = &debugCallback
+		};
+		
+		return vk::raii::DebugUtilsMessengerEXT( instance, create_info );
+	} // end-of-function: createDebugMessenger
+#endif
+
 } // end-of-namespace: <unnamed>
 
 int main() {
+	std::atexit( spdlog::shutdown );
+	
 	spdlog::info(
 		"Starting MyTemplate v{}.{}.{}...",
 		MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH
 	);
+	
+	if constexpr ( is_debug_mode ) {
+		spdlog::set_level( spdlog::level::debug );
+		spdlog::info( "Running DEBUG build" );
+	}
 	
 	spdlog::info( "Creating window..." );
 	if ( not glfwInit() ) {
@@ -148,7 +253,9 @@ int main() {
 				MYTEMPLATE_VERSION_PATCH
 			)
 		};
-		vk::raii::Context   context  {};
+		
+		vk::raii::Context context {};
+		
 		vk::ApplicationInfo app_info {
 			.pApplicationName   = "MyTemplate App", // TODO: make customization point 
 			.applicationVersion =  version,         // TODO: make customization point 
@@ -157,21 +264,23 @@ int main() {
 			.apiVersion         =  VK_API_VERSION_1_1
 		};
 		
-		// vk::DebugUtilsMessengerCreateInfoEXT
-		
-		vk::InstanceCreateInfo instance_create_info { .pApplicationInfo = &app_info };
+		vk::InstanceCreateInfo instance_create_info {
+			.pApplicationInfo = &app_info
+		};
 		enableValidationLayers( context, instance_create_info );
 		enableInstanceExtensions( instance_create_info );
+		spdlog::info( "Creating instance..." );	
 		vk::raii::Instance instance( context, instance_create_info );
 		
 		#if !defined( NDEBUG )
-			 // TODO: vk::raii::DebugUtilsMessengerEXT debugUtilsMessenger
+			auto debug_messenger = createDebugMessenger( context, instance );
 		#endif
+		
 		// enumerate physical devices:
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
 ///////////////////////////////////////////////////////////////////////////////////////
-		vk::raii::PhysicalDevices physical_devices( instance ); // SUS
+		//vk::raii::PhysicalDevices physical_devices( instance ); // SUS
 		
 		auto surface   = vk::SurfaceKHR();                      // SUS
 		auto surface_c = static_cast<VkSurfaceKHR>( surface );  // SUS
@@ -182,10 +291,8 @@ int main() {
 			 nullptr,
 			&surface_c
 		);
-		if ( result != VkResult::VK_SUCCESS ) {
-			spdlog::critical( "Unable to create GLFW window surface!" );
-			abort();
-		}
+		if ( result != VkResult::VK_SUCCESS )
+			throw std::runtime_error( "Unable to create GLFW window surface!" );
 		
 		// main loop:
 		while ( not glfwWindowShouldClose(window_p) ) {
@@ -193,27 +300,26 @@ int main() {
 			glfwSwapBuffers( window_p );
 			glfwPollEvents();
 		}
-		
-		// exiting:
 		spdlog::info( "Exiting MyTemplate..." );
 		spdlog::info( "Destroying window..." );
 		glfwDestroyWindow( window_p );
 		spdlog::info( "Terminating GLFW..." );
 		glfwTerminate();
-		return EXIT_SUCCESS;
 	}
 	catch ( vk::SystemError const &e ) {
 		spdlog::critical( "std::exception: {}", e.what() );
-		abort();
+		std::exit(EXIT_FAILURE);
 	}
 	catch ( std::exception const &e ) {
 		spdlog::critical( "vk::SystemError: {}", e.what() );
-		abort();
+		std::exit(EXIT_FAILURE);
 	}
 	catch (...) {
 		spdlog::critical( "Unknown error encountered!" );
-		abort();
+		std::exit(EXIT_FAILURE);
 	}
+	// exiting:
+	return EXIT_SUCCESS;
 }
 
 /*

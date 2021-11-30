@@ -1,0 +1,42 @@
+{
+	"configurations": {
+		"Debug": {
+			"adapter": "vscode-cpptools",
+			"breakpoints": {
+				"exception": {
+					"caught": "Y",
+					"uncaught": "Y"
+				}
+			},
+			"filetypes": [ "cpp", "c", "objc", "rust" ],
+			"default": true,
+			"configuration": {
+				"request": "launch",
+				"program": "${workspaceRoot}/debug/MyTemplate",
+				"args": [],
+				"cwd": "${workspaceRoot}/debug/",
+				"environment": [],
+				"stopAtEntry": true,
+//				"console": "integratedTerminal",
+				"externalConsole": true,
+				"MIMode": "gdb",
+				"setupCommands": [
+					{
+						"description": "Enable pretty-printing for gdb",
+						"text": "-enable-pretty-printing",
+						"ignoreFailures": true
+					}
+				]
+			}
+		},
+		"Attach": {
+			"adapter": "vscode-cpptools",
+			"filetypes": [ "cpp", "c", "objc", "rust" ],
+			"configuration": {
+				"request": "attach",
+				"program": "${workspaceRoot}/debug/MyTemplate",
+				"MIMode": "gdb"
+			}
+		}
+	}
+}
