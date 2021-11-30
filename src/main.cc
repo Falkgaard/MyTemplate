@@ -65,6 +65,8 @@ namespace { // unnamed namespace for file scope
 		"VK_LAYER_KHRONOS_validation"
 	};
 	
+	// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
+	
 	void
 	enableValidationLayers( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
 		noexcept( not is_debug_mode )
@@ -74,9 +76,9 @@ namespace { // unnamed namespace for file scope
 			auto const available_validation_layers { context.enumerateInstanceLayerProperties() };
 			// print required and available layers:
 			for ( auto const &e : required_validation_layers )
-				spdlog::info( "Required layer: `{}`", e );
+				spdlog::info( "Required validation layer: `{}`", e );
 			for ( auto const &e : available_validation_layers )
-				spdlog::info( "Available layer: `{}`", e.layerName );
+				spdlog::info( "Available validation layer: `{}`", e.layerName );
 			bool is_missing_layer { false };
 			// ensure required layers are available:
 			for ( auto const &target : required_validation_layers ) {
@@ -89,9 +91,10 @@ namespace { // unnamed namespace for file scope
 				}
 				if ( not match_found ) {
 					is_missing_layer = true;
-					spdlog::error( "Missing layer: `{}`!", target );
+					spdlog::error( "Missing validation layer: `{}`!", target );
 				}
 			}
+			
 			// handle success or failure:
 			if ( is_missing_layer )
 				throw std::runtime_error( "Failed to load required validation layers!" );
@@ -104,14 +107,16 @@ namespace { // unnamed namespace for file scope
 	
 	std::vector<char const *> required_extensions {
 		#if !defined( NDEBUG )
-			VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+			VK_EXT_DEBUG_UTILS_EXTENSION_NAME ,
+			VK_EXT_DEBUG_REPORT_EXTENSION_NAME
 		#endif
 	};
 	
 	void
-	enableInstanceExtensions( vk::InstanceCreateInfo &instance_create_info )
+	enableInstanceExtensions( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
 	{
 		spdlog::info( "Enabling instance extensions..." );
+		auto const available_extensions { context.enumerateInstanceExtensionProperties() };
 		// get required GLFW extensions:
 		u32  glfw_extension_count;
 		auto glfw_extension_list { glfwGetRequiredInstanceExtensions( &glfw_extension_count ) };
@@ -123,13 +128,36 @@ namespace { // unnamed namespace for file scope
 			for ( i32 i=0; i<glfw_extension_count; ++i )
 				required_extensions.push_back( glfw_extension_list[i] );
 			
-			// log requirements:
+			// print required and available extensions:
 			for ( auto const &e : required_extensions )
-				spdlog::info( "Required extension: {}", e );
+				spdlog::info( "Required instance extension: `{}`", e );
+			for ( auto const &e : available_extensions )
+				spdlog::info( "Available instance extension: `{}`", e.extensionName );
 			
+			// ensure required extensions are available:
+			bool is_missing_extension { false };
+			for ( auto const &target : required_extensions ) {
+				bool match_found { false };
+				for ( auto const &extension : available_extensions ) {
+					if ( std::strcmp( target, extension.extensionName ) == 0 ) {
+						match_found = true;
+						break;
+					}
+				}
+				if ( not match_found ) {
+					is_missing_extension = true;
+					spdlog::error( "Missing instance extension: `{}`", target );
+				}
+			}
+			
+			// handle success or failure:
+			if ( is_missing_extension )
+				throw std::runtime_error( "Failed to load required instance extensions!" );
+			else {
+				instance_create_info.enabledExtensionCount   = static_cast<u32>( required_extensions.size() );
+				instance_create_info.ppEnabledExtensionNames = required_extensions.data();
+			}
 			// set create info fields:
-			instance_create_info.enabledExtensionCount   = static_cast<u32>( required_extensions.size() );
-			instance_create_info.ppEnabledExtensionNames = required_extensions.data();
 		}
 	} // end-of-function: enableInstanceExtensions
 	
@@ -267,8 +295,8 @@ int main() {
 		vk::InstanceCreateInfo instance_create_info {
 			.pApplicationInfo = &app_info
 		};
-		enableValidationLayers( context, instance_create_info );
-		enableInstanceExtensions( instance_create_info );
+		enableValidationLayers(   context, instance_create_info );
+		enableInstanceExtensions( context, instance_create_info );
 		spdlog::info( "Creating instance..." );	
 		vk::raii::Instance instance( context, instance_create_info );
 		
@@ -282,15 +310,17 @@ int main() {
 ///////////////////////////////////////////////////////////////////////////////////////
 		//vk::raii::PhysicalDevices physical_devices( instance ); // SUS
 		
-		auto surface   = vk::SurfaceKHR();                      // SUS
-		auto surface_c = static_cast<VkSurfaceKHR>( surface );  // SUS
-		auto *window_p = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr );
-		auto  result   = glfwCreateWindowSurface(               // SUS
+		auto  surface_tmp = VkSurfaceKHR {};
+		auto *window_p    = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr );
+		auto  result      = glfwCreateWindowSurface(               // SUS
 			*instance,                                           // SUS
 			 window_p,
 			 nullptr,
-			&surface_c
+			&surface_tmp
 		);
+		
+		vk::raii::SurfaceKHR surface( instance, surface_tmp ); 
+	
 		if ( result != VkResult::VK_SUCCESS )
 			throw std::runtime_error( "Unable to create GLFW window surface!" );
 		
@@ -305,6 +335,7 @@ int main() {
 		glfwDestroyWindow( window_p );
 		spdlog::info( "Terminating GLFW..." );
 		glfwTerminate();
+		std::exit(EXIT_SUCCESS);
 	}
 	catch ( vk::SystemError const &e ) {
 		spdlog::critical( "std::exception: {}", e.what() );
@@ -318,8 +349,6 @@ int main() {
 		spdlog::critical( "Unknown error encountered!" );
 		std::exit(EXIT_FAILURE);
 	}
-	// exiting:
-	return EXIT_SUCCESS;
 }
 
 /*
