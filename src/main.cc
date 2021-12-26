@@ -280,7 +280,9 @@ namespace { // unnamed namespace for file scope
 	
 } // end-of-namespace: <unnamed>
 
-int main() {
+int
+main()
+{
 	std::atexit( spdlog::shutdown );
 	
 	spdlog::info(
@@ -342,6 +344,43 @@ int main() {
 		auto physical_device {
 			getPhysicalDevice( instance )
 		};
+	
+		// TODO: refactor
+		u32 const graphics_device_queue_family_index {
+			[&physical_device]() -> u32 {
+				auto const &queue_family_properties {
+					physical_device.getQueueFamilyProperties()
+				};
+				spdlog::info( "Searching for graphics queue family..." );
+				auto const it {
+					std::find_if(
+						std::begin( queue_family_properties ),
+						std::end(   queue_family_properties ),
+						[]( vk::QueueFamilyProperties const &queue_family_properties ) {
+							return bool { queue_family_properties.queueFlags bitand vk::QueueFlagBits::eGraphics };
+						}
+					)
+				};
+				if ( it != std::end(queue_family_properties) ) {
+					spdlog::info( "Graphics queue family found!" );
+					return static_cast<u32>( std::distance( std::begin(queue_family_properties), it ) );
+				}
+				else throw std::runtime_error( "Graphics queue family not found!" );
+			}()
+		};
+		u32 const graphics_device_queue_count    {  1  };
+		f32 const graphics_device_queue_priority { .0f };
+		vk::DeviceQueueCreateInfo const graphics_device_queue_create_info {
+			.queueFamilyIndex =  graphics_device_queue_family_index,
+			.queueCount       =  graphics_device_queue_count,
+			.pQueuePriorities = &graphics_device_queue_priority
+		};
+		spdlog::info( "Creating logical device..." );
+		vk::DeviceCreateInfo const graphics_device_create_info {
+			.pQueueCreateInfos = &graphics_device_queue_create_info
+			// TODO: add more?
+		};
+		vk::raii::Device device( physical_device, &graphics_device_create_info );
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
 
