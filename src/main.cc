@@ -380,7 +380,7 @@ main()
 			.pQueueCreateInfos = &graphics_device_queue_create_info
 			// TODO: add more?
 		};
-		vk::raii::Device device( physical_device, &graphics_device_create_info );
+		vk::raii::Device device( physical_device, graphics_device_create_info );
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
 
