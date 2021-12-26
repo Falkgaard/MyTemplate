@@ -344,7 +344,9 @@ main()
 		auto physical_device {
 			getPhysicalDevice( instance )
 		};
-	
+		
+	// logical device:
+		
 		// TODO: refactor
 		u32 const graphics_device_queue_family_index {
 			[&physical_device]() -> u32 {
@@ -382,9 +384,51 @@ main()
 			// TODO: add more?
 		};
 		vk::raii::Device device( physical_device, graphics_device_create_info );
+		
+	// command buffer stuff:
+		
+		spdlog::info( "Creating command buffer pool..." );
+		vk::CommandPoolCreateInfo const command_pool_create_info {
+			// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
+			//       Also, one pool would be needed for each queue family (if ever extended).
+			.queueFamilyIndex = graphics_device_queue_family_index
+		};
+		vk::raii::CommandPool command_pool( device, command_pool_create_info );
+		u32 const command_buffer_count { 1 };
+		spdlog::info( "Creating {} command buffer(s)...", command_buffer_count );
+		vk::CommandBufferAllocateInfo const command_buffer_allocate_info {
+			.commandPool        = *command_pool,
+			.level              =  vk::CommandBufferLevel::ePrimary, // TODO: comment
+			.commandBufferCount =  command_buffer_count              // NOTE: extend here if needed
+		};
+		vk::raii::CommandBuffers command_buffers( device, command_buffer_allocate_info );
+		
+	// Swapchain
+		
+		//
+	
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
-
+		
+		// Swapchain
+		// Image View
+		// Depth Buffer
+		// Uniform Buffer
+		// Pipeline Layout
+		// Desciptor Set
+		// Render Pass
+		// Shaders
+		// Framebuffers
+		// Vertex buffer
+		// Pipeline
+		
+		// ...
+		
+		// vkBeginCommandBuffer()
+		// vkCmd???()
+		// vkEndCommandBuffer()
+		// vkQueueSubmit()
+	
 ///////////////////////////////////////////////////////////////////////////////////////
 		
 		VkSurfaceKHR surface_tmp;
