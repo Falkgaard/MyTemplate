@@ -377,7 +377,8 @@ main()
 		};
 		spdlog::info( "Creating logical device..." );
 		vk::DeviceCreateInfo const graphics_device_create_info {
-			.pQueueCreateInfos = &graphics_device_queue_create_info
+			.queueCreateInfoCount = 1,
+			.pQueueCreateInfos    = &graphics_device_queue_create_info
 			// TODO: add more?
 		};
 		vk::raii::Device device( physical_device, graphics_device_create_info );
