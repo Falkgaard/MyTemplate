@@ -28,11 +28,14 @@ add_executable (
 	src/main.cc
 )
 
+target_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS )
+target_compile_definitions( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_NONE )
+target_compile_definitions( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_VULKAN )
 #add_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS            )
 #add_compile_definitions( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_NONE GLFW_INCLUDE_VULKAN )
 
-target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_23                                        ) # Set C++ standard to C++2b
-target_compile_options     ( ${PROJECT_NAME} PUBLIC "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->" ) # To help ensure cross-platform compatibility
+target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20                                        ) # Set C++ standard to C++20
+# TODO: target_compile_options     ( ${PROJECT_NAME} PUBLIC "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->" ) # To help ensure cross-platform compatibility
 target_include_directories ( ${PROJECT_NAME} PUBLIC "src/"                                            ) # Source code
 set_target_properties      ( ${PROJECT_NAME} PROPERTIES CXX_EXTENSIONS OFF                            ) # For cross-platform compatibility
 
@@ -47,7 +50,7 @@ CPMAddPackage( "gh:KhronosGroup/Vulkan-Headers#a15237165443ba1ef430ed332745f9a99
 CPMAddPackage( "gh:falkgaard/fHash@0.1"                                                  ) # fRNG    v0.1.0
 CPMAddPackage( "gh:falkgaard/fRNG@0.1"                                                   ) # fHash   v0.1.0
 # ImGui is directly in src/
-target_link_libraries( ${PROJECT_NAME} PRIVATE
+target_link_libraries( ${PROJECT_NAME} PUBLIC
 	doctest::doctest
 	spdlog::spdlog
 	fmt::fmt

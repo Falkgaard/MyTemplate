@@ -8,10 +8,10 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
-#define  GLFW_INCLUDE_NONE
-#define  GLFW_INCLUDE_VULKAN
+//#define  GLFW_INCLUDE_NONE
+//#define  GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#define  VULKAN_HPP_NO_CONSTRUCTORS
+//#define  VULKAN_HPP_NO_CONSTRUCTORS
 #include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_raii.hpp"
 
@@ -161,88 +161,123 @@ namespace { // unnamed namespace for file scope
 		}
 	} // end-of-function: enableInstanceExtensions
 	
-#if !defined( NDEBUG )
-	VKAPI_ATTR VkBool32 VKAPI_CALL
-	debugCallback(
-		VkDebugUtilsMessageSeverityFlagBitsEXT      severity_flags,
-		VkDebugUtilsMessageTypeFlagsEXT             type_flags,
-		VkDebugUtilsMessengerCallbackDataEXT const *callback_data_p,
-		void * // unused for now
-	)
+	vk::raii::PhysicalDevice
+	getPhysicalDevice( vk::raii::Instance &instance )
 	{
-		// TODO: replace invocation duplication by using a function map?
-		auto const  msg_type {
-			vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(type_flags) )
-		};
-		auto const  msg_severity {
-			static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(severity_flags)
-		};
-		auto const  msg_id        { callback_data_p->messageIdNumber };
-		auto const &msg_id_name_p { callback_data_p->pMessageIdName  };
-		auto const &msg_p         { callback_data_p->pMessage        };
-		switch (msg_severity) {
-			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
-				spdlog::error( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
-				break;
-			}
-			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
-				spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
-				break;
-			}
-			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: find better fit?
-				spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
-				break;
-			}
-			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
-				spdlog::warn( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
-				break;
-			}
-		}
-		// TODO: expand with more info from callback_data_p
-		return false; // TODO: why?
-	} // end-of-function: debugCallback
-	
-	[[nodiscard]] auto
-	createDebugMessenger( vk::raii::Context &context, vk::raii::Instance &instance )
-	{
-		spdlog::info( "Creating debug messenger..." );
+		spdlog::info( "Selecting most suitable physical device..." );
+		vk::raii::PhysicalDevices physical_devices( instance );
+		if ( physical_devices.empty() )
+			throw std::runtime_error( "Unable to find any physical devices!" );
 		
-		auto properties = context.enumerateInstanceExtensionProperties();
+		auto best_match {
+			std::move( physical_devices.front() )
+		};
 		
-		// look for debug utils extension:
-		auto search_result {
-			std::find_if(
-				std::begin( properties ),
-				std::end(   properties ),
-				[]( vk::ExtensionProperties const &p ) {
-					return std::strcmp( p.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME ) == 0;
+		// replace best match with a discrete GPU (if found)
+		if ( best_match.getProperties().deviceType != vk::PhysicalDeviceType::eDiscreteGpu )
+			for ( auto &current_physical_device: physical_devices )
+				if ( current_physical_device.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu ) {
+					best_match = std::move( current_physical_device );
+					break;
 				}
-			)
+		
+		if ( best_match.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu )
+			spdlog::info( "Discrete GPU found!" );
+		else 
+			spdlog::info( "Only integrated GPU found!" );
+		
+		std::string const swapchain_extension_name {
+			VK_KHR_SWAPCHAIN_EXTENSION_NAME
 		};
-		if ( search_result == std::end( properties ) )
-			throw std::runtime_error( "Could not find " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " extension!" );
+		for ( auto const &extension: best_match.enumerateDeviceExtensionProperties() )
+			if ( extension.extensionName == swapchain_extension_name )
+				return best_match; // swapchain extension support found
 		
-		auto const severity_flags = vk::DebugUtilsMessageSeverityFlagsEXT(
-			vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-			vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
-		);
+		throw std::runtime_error( "Physical device does not support swapchains!" );
+	} // end-of-function: pickPhysicalDevice
+	
+	#if !defined( NDEBUG )
+		VKAPI_ATTR VkBool32 VKAPI_CALL
+		debugCallback(
+			VkDebugUtilsMessageSeverityFlagBitsEXT      severity_flags,
+			VkDebugUtilsMessageTypeFlagsEXT             type_flags,
+			VkDebugUtilsMessengerCallbackDataEXT const *callback_data_p,
+			void * // unused for now
+		)
+		{
+			// TODO: replace invocation duplication by using a function map?
+			auto const  msg_type {
+				vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(type_flags) )
+			};
+			auto const  msg_severity {
+				static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(severity_flags)
+			};
+			auto const  msg_id        { callback_data_p->messageIdNumber };
+			auto const &msg_id_name_p { callback_data_p->pMessageIdName  };
+			auto const &msg_p         { callback_data_p->pMessage        };
+			switch (msg_severity) {
+				case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
+					spdlog::error( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+					break;
+				}
+				case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
+					spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+					break;
+				}
+				case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: find better fit?
+					spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+					break;
+				}
+				case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
+					spdlog::warn( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+					break;
+				}
+			}
+			// TODO: expand with more info from callback_data_p
+			return false; // TODO: why?
+		} // end-of-function: debugCallback
 		
-		auto const type_flags = vk::DebugUtilsMessageTypeFlagsEXT(
-			vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral     |
-			vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-			vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
-		);
-		
-		auto const create_info = vk::DebugUtilsMessengerCreateInfoEXT {
-			.messageSeverity =  severity_flags,
-			.messageType     =  type_flags,
-			.pfnUserCallback = &debugCallback
-		};
-		
-		return vk::raii::DebugUtilsMessengerEXT( instance, create_info );
-	} // end-of-function: createDebugMessenger
-#endif
-
+		[[nodiscard]] auto
+		createDebugMessenger( vk::raii::Context &context, vk::raii::Instance &instance )
+		{
+			spdlog::info( "Creating debug messenger..." );
+			
+			auto properties = context.enumerateInstanceExtensionProperties();
+			
+			// look for debug utils extension:
+			auto search_result {
+				std::find_if(
+					std::begin( properties ),
+					std::end(   properties ),
+					[]( vk::ExtensionProperties const &p ) {
+						return std::strcmp( p.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME ) == 0;
+					}
+				)
+			};
+			if ( search_result == std::end( properties ) )
+				throw std::runtime_error( "Could not find " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " extension!" );
+			
+			auto const severity_flags = vk::DebugUtilsMessageSeverityFlagsEXT(
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
+			);
+			
+			auto const type_flags = vk::DebugUtilsMessageTypeFlagsEXT(
+				vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral     |
+				vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+				vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
+			);
+			
+			auto const create_info = vk::DebugUtilsMessengerCreateInfoEXT {
+				.messageSeverity =  severity_flags,
+				.messageType     =  type_flags,
+				.pfnUserCallback = &debugCallback
+			};
+			
+			return vk::raii::DebugUtilsMessengerEXT( instance, create_info );
+		} // end-of-function: createDebugMessenger
+	#endif
+	
 } // end-of-namespace: <unnamed>
 
 int main() {
@@ -304,10 +339,12 @@ int main() {
 			auto debug_messenger = createDebugMessenger( context, instance ); // TODO: rename
 		#endif
 		
-		// enumerate physical devices:
+		auto physical_device {
+			getPhysicalDevice( instance )
+		};
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
-		//vk::raii::PhysicalDevices physical_devices( instance );
+
 ///////////////////////////////////////////////////////////////////////////////////////
 		
 		VkSurfaceKHR surface_tmp;

@@ -9,8 +9,14 @@ build/
 debug/
 .cache/
 
-# Generate compiler commands
+# Generated compiler commands
 compile_commands.json
+
+# Clangd
+.clangd
+
+# Misc
+package-lock.json
 
 # Prerequisites
 *.d
