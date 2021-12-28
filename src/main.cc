@@ -280,6 +280,58 @@ namespace { // unnamed namespace for file scope
 	
 } // end-of-namespace: <unnamed>
 
+// NOTE: value corresponds to number of frames to allow for static casting
+enum struct FrameBuffering: u32 {
+	eSingle = 1,
+	eDouble = 2,
+	eTriple = 3 
+}; // end-of-enum-struct: Framebuffering
+
+[[nodiscard]] auto constexpr
+getFramebufferCount( FrameBuffering const fb ) noexcept
+{
+	return static_cast<u32>( fb );
+}
+
+enum struct PresentationPriority {
+	eMinimalLatency,        
+	eMinimalStuttering,     
+	eMinimalPowerConsumption
+};
+
+[[nodiscard]] auto constexpr
+getPresentMode( PresentationPriority const pp ) noexcept
+{
+	switch ( pp ) {
+		case PresentationPriority::eMinimalLatency          : return vk::PresentModeKHR::eMailbox;
+		case PresentationPriority::eMinimalStuttering       : return vk::PresentModeKHR::eFifoRelaxed;
+		case PresentationPriority::eMinimalPowerConsumption : return vk::PresentModeKHR::eFifoRelaxed;
+	}
+}
+
+/*
+// TODO: make generic or use existing vec type
+struct V2i {
+	int x,y;
+}; // end-of-struct: V2i
+
+class Renderer {
+	struct Config {
+		V2i             internal_render_resolution;
+		FrameBuffering  frame_buffering;
+	}; // end-of-struct: Renderer::Config
+	// Config
+	// Context
+	// Instance
+	// Physical Device
+	// Logical Device
+	// Command Buffer Pool
+	// Command Buffer(s)
+	// Surface
+	// Swapchain
+}; // end-of-class: Renderer
+*/
+
 int
 main()
 {
@@ -319,6 +371,7 @@ main()
 			)
 		};
 		
+	// Context & instance:
 		vk::raii::Context context {};
 		
 		vk::ApplicationInfo app_info {
@@ -337,16 +390,17 @@ main()
 		spdlog::info( "Creating instance..." );	
 		vk::raii::Instance instance( context, instance_create_info );
 		
+	// Debug messenger:
 		#if !defined( NDEBUG )
 			auto debug_messenger = createDebugMessenger( context, instance ); // TODO: rename
 		#endif
 		
+	// Physical device:	
 		auto physical_device {
 			getPhysicalDevice( instance )
 		};
 		
-	// logical device:
-		
+	// Logical device:
 		// TODO: refactor
 		u32 const graphics_device_queue_family_index {
 			[&physical_device]() -> u32 {
@@ -379,14 +433,13 @@ main()
 		};
 		spdlog::info( "Creating logical device..." );
 		vk::DeviceCreateInfo const graphics_device_create_info {
-			.queueCreateInfoCount = 1,
+			.queueCreateInfoCount =  1,
 			.pQueueCreateInfos    = &graphics_device_queue_create_info
 			// TODO: add more?
 		};
 		vk::raii::Device device( physical_device, graphics_device_create_info );
 		
-	// command buffer stuff:
-		
+	// Command buffer(s):
 		spdlog::info( "Creating command buffer pool..." );
 		vk::CommandPoolCreateInfo const command_pool_create_info {
 			// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
@@ -403,8 +456,42 @@ main()
 		};
 		vk::raii::CommandBuffers command_buffers( device, command_buffer_allocate_info );
 		
-	// Swapchain
+	// Window & Surface:
+		spdlog::info( "Creating GLFW window surface... ");
+		VkSurfaceKHR surface_tmp;
+		auto *window_p = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr ); // TODO: RAII wrapper
+		auto  result   = glfwCreateWindowSurface(
+			*instance,
+			 window_p,
+			 nullptr,
+			&surface_tmp
+		);
 		
+		vk::raii::SurfaceKHR surface( instance, surface_tmp ); 
+		
+		if ( result != VkResult::VK_SUCCESS )
+			throw std::runtime_error( "Unable to create GLFW window surface!" );
+		
+	// Swapchain
+		spdlog::info( "Creating swapchain..." );	
+		// TODO: check present support	
+		vk::SwapchainCreateInfoKHR const swapchain_create_info {
+			.surface               = *surface,
+			.minImageCount         =  getFramebufferCount( FrameBuffering::eTriple ),             // TODO: capabilities query & config refactor
+			.imageFormat           =  vk::Format::eA8B8G8R8UnormPack32,                           // TODO: capabilities query & config refactor
+			.imageColorSpace       =  vk::ColorSpaceKHR::eExtendedSrgbLinearEXT,
+			.imageExtent           =  {}, // TODO
+			.imageArrayLayers      =  1, // not-stereoscopic
+			.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // change to eTransferDst if doing post-processing
+			.imageSharingMode      =  {},
+			.preTransform          =  {},
+			.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
+			.presentMode           =  getPresentMode( PresentationPriority::eMinimalStuttering ), // TODO: capabilities query & config refactor
+			.clipped               =  VK_TRUE,
+			.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit
+			// TODO: queues?
+		};
+		vk::raii::SwapchainKHR swapchain( device, swapchain_create_info );
 		//
 	
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -430,20 +517,12 @@ main()
 		// vkQueueSubmit()
 	
 ///////////////////////////////////////////////////////////////////////////////////////
-		
-		VkSurfaceKHR surface_tmp;
-		auto *window_p = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr ); // TODO: RAII wrapper
-		auto  result   = glfwCreateWindowSurface(
-			*instance,
-			 window_p,
-			 nullptr,
-			&surface_tmp
-		);
-		
-		vk::raii::SurfaceKHR surface( instance, surface_tmp ); 
-	
-		if ( result != VkResult::VK_SUCCESS )
-			throw std::runtime_error( "Unable to create GLFW window surface!" );
+
+
+
+
+
+
 		
 		// main loop:
 		while ( not glfwWindowShouldClose(window_p) ) {
