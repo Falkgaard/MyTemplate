@@ -16,6 +16,9 @@
 #include "vulkan/vulkan_raii.hpp"
 
 #include <iostream>
+#include <array>
+#include <optional>
+
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -400,36 +403,68 @@ main()
 			getPhysicalDevice( instance )
 		};
 		
-	// Logical device:
-		// TODO: refactor
-		u32 const graphics_device_queue_family_index {
-			[&physical_device]() -> u32 {
+	// Window & Surface:
+		spdlog::info( "Creating GLFW window surface... ");
+		VkSurfaceKHR surface_tmp;
+		auto *p_window = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr ); // TODO: RAII wrapper
+		auto  result   = glfwCreateWindowSurface(
+			*instance,
+			 p_window,
+			 nullptr,
+			&surface_tmp
+		);
+		
+		vk::raii::SurfaceKHR surface( instance, surface_tmp ); 
+		
+		if ( result != VkResult::VK_SUCCESS )
+			throw std::runtime_error( "Unable to create GLFW window surface!" );
+		
+	// Queue family indices:
+		auto const queue_family_indices {
+			[&physical_device,&surface]() -> std::array<u32,2> {
+				std::optional<u32> present_queue_family_index  {};
+				std::optional<u32> graphics_queue_family_index {};
 				auto const &queue_family_properties {
 					physical_device.getQueueFamilyProperties()
 				};
 				spdlog::info( "Searching for graphics queue family..." );
-				auto const it {
-					std::find_if(
-						std::begin( queue_family_properties ),
-						std::end(   queue_family_properties ),
-						[]( vk::QueueFamilyProperties const &queue_family_properties ) {
-							return bool { queue_family_properties.queueFlags bitand vk::QueueFlagBits::eGraphics };
-						}
-					)
-				};
-				if ( it != std::end(queue_family_properties) ) {
-					spdlog::info( "Graphics queue family found!" );
-					return static_cast<u32>( std::distance( std::begin(queue_family_properties), it ) );
+				for ( u32 index{0}; index<std::size(queue_family_properties); ++index ) {
+					bool const supports_graphics { queue_family_properties[index].queueFlags bitand vk::QueueFlagBits::eGraphics };
+					bool const supports_present  { physical_device.getSurfaceSupportKHR( index, *surface ) == VK_TRUE };
+					if ( supports_graphics and supports_present ) {
+						spdlog::info( "Found queue family that supports both graphics and present!" );
+						present_queue_family_index  = index;
+						graphics_queue_family_index = index;
+						break;
+					}
+					else if ( supports_graphics ) {
+						spdlog::info( "Found queue family that supports graphics!" );
+						graphics_queue_family_index = index;
+					}
+					else if ( supports_present ) {
+						spdlog::info( "Found queue family that supports present!" );
+						present_queue_family_index = index;
+					}
 				}
-				else throw std::runtime_error( "Graphics queue family not found!" );
+				if ( present_queue_family_index.has_value() and graphics_queue_family_index.has_value() ) {
+					if ( present_queue_family_index.value() != graphics_queue_family_index.value() )
+						spdlog::info( "Selected different queue families for graphics and present." );
+					return { present_queue_family_index.value(), graphics_queue_family_index.value() };
+				}
+				else throw std::runtime_error( "Queue family support for either graphics or present missing!" );
 			}()
 		};
-		u32 const graphics_device_queue_count    {  1  };
-		f32 const graphics_device_queue_priority { .0f };
+		bool const is_using_separate_queue_families {
+			queue_family_indices[0] != queue_family_indices[1]
+		};
+		
+	// Logical device:
+		u32 const graphics_queue_count    {  1  };
+		f32 const graphics_queue_priority { .0f };
 		vk::DeviceQueueCreateInfo const graphics_device_queue_create_info {
-			.queueFamilyIndex =  graphics_device_queue_family_index,
-			.queueCount       =  graphics_device_queue_count,
-			.pQueuePriorities = &graphics_device_queue_priority
+			.queueFamilyIndex =  queue_family_indices[1], // TODO: refactor
+			.queueCount       =  graphics_queue_count,
+			.pQueuePriorities = &graphics_queue_priority
 		};
 		spdlog::info( "Creating logical device..." );
 		vk::DeviceCreateInfo const graphics_device_create_info {
@@ -444,7 +479,7 @@ main()
 		vk::CommandPoolCreateInfo const command_pool_create_info {
 			// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
 			//       Also, one pool would be needed for each queue family (if ever extended).
-			.queueFamilyIndex = graphics_device_queue_family_index
+			.queueFamilyIndex = queue_family_indices[1] // TODO: refactor
 		};
 		vk::raii::CommandPool command_pool( device, command_pool_create_info );
 		u32 const command_buffer_count { 1 };
@@ -455,45 +490,66 @@ main()
 			.commandBufferCount =  command_buffer_count              // NOTE: extend here if needed
 		};
 		vk::raii::CommandBuffers command_buffers( device, command_buffer_allocate_info );
+
+	// Capabilities: (TODO: refactor wrap)
+		auto const capabilities {
+			physical_device.getSurfaceCapabilitiesKHR( *surface ) // TODO: 2KHR?
+		};
 		
-	// Window & Surface:
-		spdlog::info( "Creating GLFW window surface... ");
-		VkSurfaceKHR surface_tmp;
-		auto *window_p = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr ); // TODO: RAII wrapper
-		auto  result   = glfwCreateWindowSurface(
-			*instance,
-			 window_p,
-			 nullptr,
-			&surface_tmp
-		);
+	// Extent:
+		vk::Extent2D const image_extent {
+			[&p_window,&capabilities] { // TODO: refactor into get_image_extent_function
+				vk::Extent2D result {};
+				if ( capabilities.currentExtent.height == std::numeric_limits<u32>::max() )
+					result = capabilities.currentExtent;
+				else {
+					int width, height;
+					glfwGetWindowSize( p_window, &width, &height );
+					result.width =
+						std::max(
+							capabilities.minImageExtent.width,
+							std::min(
+								static_cast<u32>(width),
+								capabilities.maxImageExtent.width
+							)
+						);
+					result.height =
+						std::max(
+							capabilities.minImageExtent.height,
+							std::min(
+								static_cast<u32>(height),
+								capabilities.maxImageExtent.height
+							)
+						);
+				}
+				return result;
+			}()
+		};
 		
-		vk::raii::SurfaceKHR surface( instance, surface_tmp ); 
-		
-		if ( result != VkResult::VK_SUCCESS )
-			throw std::runtime_error( "Unable to create GLFW window surface!" );
-		
-	// Swapchain
+	// Swapchain:
 		spdlog::info( "Creating swapchain..." );	
 		// TODO: check present support	
 		vk::SwapchainCreateInfoKHR const swapchain_create_info {
 			.surface               = *surface,
-			.minImageCount         =  getFramebufferCount( FrameBuffering::eTriple ),             // TODO: capabilities query & config refactor
-			.imageFormat           =  vk::Format::eA8B8G8R8UnormPack32,                           // TODO: capabilities query & config refactor
-			.imageColorSpace       =  vk::ColorSpaceKHR::eExtendedSrgbLinearEXT,
-			.imageExtent           =  {}, // TODO
-			.imageArrayLayers      =  1, // not-stereoscopic
-			.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // change to eTransferDst if doing post-processing
-			.imageSharingMode      =  {},
-			.preTransform          =  {},
+			.minImageCount         =  getFramebufferCount( FrameBuffering::eTriple ), // TODO: capabilities query & config refactor
+			.imageFormat           =  vk::Format::eA8B8G8R8UnormPack32,               // TODO: capabilities query & config refactor
+			.imageColorSpace       =  vk::ColorSpaceKHR::eExtendedSrgbLinearEXT,      // TODO: capabilities query & config refactor
+			.imageExtent           =  image_extent,
+			.imageArrayLayers      =  1, // non-stereoscopic
+			.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // NOTE: change to eTransferDst if doing post-processing later
+			.imageSharingMode      =  is_using_separate_queue_families ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
+			.queueFamilyIndexCount =  is_using_separate_queue_families ?                           2u : 0u,
+			.pQueueFamilyIndices   =  is_using_separate_queue_families ?  queue_family_indices.data() : nullptr,
+			.preTransform          =  capabilities.currentTransform,
 			.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
 			.presentMode           =  getPresentMode( PresentationPriority::eMinimalStuttering ), // TODO: capabilities query & config refactor
-			.clipped               =  VK_TRUE,
-			.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit
-			// TODO: queues?
+			.clipped               =  VK_TRUE
+		//	.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later
 		};
 		vk::raii::SwapchainKHR swapchain( device, swapchain_create_info );
-		//
-	
+		
+		// NOTE: possible segmentation fault here!! (TODO: fix if not solved with the upcoming code)
+		
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
 		
@@ -517,22 +573,16 @@ main()
 		// vkQueueSubmit()
 	
 ///////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-
-
 		
 		// main loop:
-		while ( not glfwWindowShouldClose(window_p) ) {
+		while ( not glfwWindowShouldClose(p_window) ) {
 			// TODO: handle input, update logic, render, draw window
-			glfwSwapBuffers( window_p );
+			glfwSwapBuffers( p_window );
 			glfwPollEvents();
 		}
 		spdlog::info( "Exiting MyTemplate..." );
 		spdlog::info( "Destroying window..." );
-		glfwDestroyWindow( window_p );
+		glfwDestroyWindow( p_window );
 		spdlog::info( "Terminating GLFW..." );
 		glfwTerminate();
 	}
