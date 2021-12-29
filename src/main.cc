@@ -18,6 +18,7 @@
 #include <iostream>
 #include <array>
 #include <optional>
+#include <algorithm>
 
 #include <cstdlib>
 #include <cstdio>
@@ -506,20 +507,16 @@ main()
 					int width, height;
 					glfwGetWindowSize( p_window, &width, &height );
 					result.width =
-						std::max(
+						std::clamp(
+							static_cast<u32>(width),
 							capabilities.minImageExtent.width,
-							std::min(
-								static_cast<u32>(width),
-								capabilities.maxImageExtent.width
-							)
+							capabilities.maxImageExtent.width
 						);
 					result.height =
-						std::max(
+						std::clamp(
+							static_cast<u32>(height),
 							capabilities.minImageExtent.height,
-							std::min(
-								static_cast<u32>(height),
-								capabilities.maxImageExtent.height
-							)
+							capabilities.maxImageExtent.height
 						);
 				}
 				return result;
@@ -527,12 +524,13 @@ main()
 		};
 		
 	// Swapchain:
+		auto const format { vk::Format::eA8B8G8R8UnormPack32 };
 		spdlog::info( "Creating swapchain..." );	
 		// TODO: check present support	
 		vk::SwapchainCreateInfoKHR const swapchain_create_info {
 			.surface               = *surface,
 			.minImageCount         =  getFramebufferCount( FrameBuffering::eTriple ), // TODO: capabilities query & config refactor
-			.imageFormat           =  vk::Format::eA8B8G8R8UnormPack32,               // TODO: capabilities query & config refactor
+			.imageFormat           =  format,                                         // TODO: capabilities query & config refactor
 			.imageColorSpace       =  vk::ColorSpaceKHR::eExtendedSrgbLinearEXT,      // TODO: capabilities query & config refactor
 			.imageExtent           =  image_extent,
 			.imageArrayLayers      =  1, // non-stereoscopic
@@ -542,7 +540,7 @@ main()
 			.pQueueFamilyIndices   =  is_using_separate_queue_families ?  queue_family_indices.data() : nullptr,
 			.preTransform          =  capabilities.currentTransform,
 			.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
-			.presentMode           =  getPresentMode( PresentationPriority::eMinimalStuttering ), // TODO: capabilities query & config refactor
+			.presentMode           =  getPresentMode( PresentationPriority::eMinimalLatency ), // TODO: capabilities query & config refactor
 			.clipped               =  VK_TRUE
 		//	.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later
 		};
@@ -550,6 +548,26 @@ main()
 		
 		// NOTE: possible segmentation fault here!! (TODO: fix if not solved with the upcoming code)
 		
+	// Image views:
+		auto swapchain_images { swapchain.getImages() };
+		std::vector<vk::raii::ImageView> image_views;
+		image_views.reserve( std::size( swapchain_images ) );
+		vk::ImageViewCreateInfo image_view_create_info {
+			.viewType         = vk::ImageViewType::e2D,
+			.format           = format,
+			.subresourceRange = vk::ImageSubresourceRange {
+				.aspectMask     = vk::ImageAspectFlagBits::eColor,
+				.baseMipLevel   = 0u,
+				.levelCount     = 1u,
+				.baseArrayLayer = 0u,
+				.layerCount     = 1u
+			}
+		};
+		for ( auto const &image: swapchain_images ) {
+			image_view_create_info.image = static_cast<vk::Image>( image );
+			image_views.push_back( vk::raii::ImageView{ device, image_view_create_info } );
+		}
+
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
 		
