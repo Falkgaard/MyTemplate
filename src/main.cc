@@ -540,15 +540,16 @@ main()
 			.pQueueFamilyIndices   =  is_using_separate_queue_families ?  queue_family_indices.data() : nullptr,
 			.preTransform          =  capabilities.currentTransform,
 			.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
-			.presentMode           =  getPresentMode( PresentationPriority::eMinimalLatency ), // TODO: capabilities query & config refactor
-			.clipped               =  VK_TRUE
-		//	.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later
+			.presentMode           =  getPresentMode( PresentationPriority::eMinimalStuttering ), // TODO: capabilities query & config refactor
+			.clipped               =  VK_TRUE,
+			.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later after implementing resizing
 		};
 		vk::raii::SwapchainKHR swapchain( device, swapchain_create_info );
 		
-		// NOTE: possible segmentation fault here!! (TODO: fix if not solved with the upcoming code)
+		// NOTE: segmentation fault here (TODO: fix if not solved with the upcoming code)
 		
 	// Image views:
+		spdlog::info( "Creating image views..." );
 		auto swapchain_images { swapchain.getImages() };
 		std::vector<vk::raii::ImageView> image_views;
 		image_views.reserve( std::size( swapchain_images ) );
@@ -556,17 +557,58 @@ main()
 			.viewType         = vk::ImageViewType::e2D,
 			.format           = format,
 			.subresourceRange = vk::ImageSubresourceRange {
-				.aspectMask     = vk::ImageAspectFlagBits::eColor,
-				.baseMipLevel   = 0u,
-				.levelCount     = 1u,
-				.baseArrayLayer = 0u,
-				.layerCount     = 1u
+				.aspectMask       = vk::ImageAspectFlagBits::eColor,
+				.baseMipLevel     = 0u,
+				.levelCount       = 1u,
+				.baseArrayLayer   = 0u,
+				.layerCount       = 1u
 			}
 		};
 		for ( auto const &image: swapchain_images ) {
 			image_view_create_info.image = static_cast<vk::Image>( image );
-			image_views.push_back( vk::raii::ImageView{ device, image_view_create_info } );
+			image_views.emplace_back( device, image_view_create_info );
 		}
+		
+// TODO: add when adding 3D // Depth buffer:
+// TODO: add when adding 3D		spdlog::info( "Creating depth image..." );
+// TODO: add when adding 3D		vk::ImageCreateInfo const depth_image_create_info {
+// TODO: add when adding 3D			.imageType             = vk::ImageType::e2D,
+// TODO: add when adding 3D			.format                = vk::Format::eD16Unorm,
+// TODO: add when adding 3D			.extent                = vk::Extent3D {
+// TODO: add when adding 3D				.width                 = image_extent.width,
+// TODO: add when adding 3D				.height                = image_extent.height,
+// TODO: add when adding 3D				.depth                 = 1
+// TODO: add when adding 3D			},
+// TODO: add when adding 3D			.mipLevels             = 1,
+// TODO: add when adding 3D			.arrayLayers           = 1,
+// TODO: add when adding 3D			.samples               = {}, // TODO
+// TODO: add when adding 3D			.usage                 = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+// TODO: add when adding 3D			.sharingMode           = vk::SharingMode::eExclusive,
+// TODO: add when adding 3D			.queueFamilyIndexCount = 0,
+// TODO: add when adding 3D			.pQueueFamilyIndices   = nullptr,
+// TODO: add when adding 3D			.initialLayout         = vk::ImageLayout::eUndefined
+// TODO: add when adding 3D		};
+// TODO: add when adding 3D		
+// TODO: add when adding 3D		vk::raii::Image depth_image( device, depth_image_create_info );
+// TODO: add when adding 3D		
+// TODO: add when adding 3D		auto const depth_image_memory_requirements {
+// TODO: add when adding 3D			depth_image.getMemoryRequirements()
+// TODO: add when adding 3D		};
+// TODO: add when adding 3D		
+// TODO: add when adding 3D		auto const memory_properties {
+// TODO: add when adding 3D			physical_device.getMemoryProperties()
+// TODO: add when adding 3D		};
+// TODO: add when adding 3D
+// TODO: add when adding 3D		u32 const memory_type_index {
+// TODO: add when adding 3D			determineMemoryTypeIndex( memory_properties, depth_image_memory_requirements, vk::MemoryPropertyFlagBits::eDeviceLocal ); // TODO: write helper
+// TODO: add when adding 3D		};
+// TODO: add when adding 3D
+// TODO: add when adding 3D		vk::MemoryAllocateInfo const memory_allocate_info {
+// TODO: add when adding 3D			.allocationSize  = depth_image_memory_requirements.size,
+// TODO: add when adding 3D			.memoryTypeIndex = memory_type_index
+// TODO: add when adding 3D		};
+// TODO: add when adding 3D
+// TODO: add when adding 3D		vk::raii::DeviceMemory depthDeviceMemory( device, memory_allocate_info );
 
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
