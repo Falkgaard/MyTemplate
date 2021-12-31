@@ -534,10 +534,9 @@ main()
 			}()
 		};
 		
-#if 0 // NOTE: temporarily disabled due to segfault
 	// Swapchain:
 		auto const format { vk::Format::eA8B8G8R8UnormPack32 };
-		spdlog::info( "Creating swapchain..." );	
+		spdlog::info( "Creating swapchain..." );
 		// TODO: check present support	
 		vk::SwapchainCreateInfoKHR const swapchain_create_info {
 			.surface               = *surface,
@@ -580,50 +579,77 @@ main()
 			image_view_create_info.image = static_cast<vk::Image>( image );
 			image_views.emplace_back( device, image_view_create_info );
 		}
-#endif
-
-// TODO: add when adding 3D // Depth buffer:
-// TODO: add when adding 3D		spdlog::info( "Creating depth image..." );
-// TODO: add when adding 3D		vk::ImageCreateInfo const depth_image_create_info {
-// TODO: add when adding 3D			.imageType             = vk::ImageType::e2D,
-// TODO: add when adding 3D			.format                = vk::Format::eD16Unorm,
-// TODO: add when adding 3D			.extent                = vk::Extent3D {
-// TODO: add when adding 3D				.width                 = image_extent.width,
-// TODO: add when adding 3D				.height                = image_extent.height,
-// TODO: add when adding 3D				.depth                 = 1
-// TODO: add when adding 3D			},
-// TODO: add when adding 3D			.mipLevels             = 1,
-// TODO: add when adding 3D			.arrayLayers           = 1,
-// TODO: add when adding 3D			.samples               = {}, // TODO
-// TODO: add when adding 3D			.usage                 = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-// TODO: add when adding 3D			.sharingMode           = vk::SharingMode::eExclusive,
-// TODO: add when adding 3D			.queueFamilyIndexCount = 0,
-// TODO: add when adding 3D			.pQueueFamilyIndices   = nullptr,
-// TODO: add when adding 3D			.initialLayout         = vk::ImageLayout::eUndefined
-// TODO: add when adding 3D		};
-// TODO: add when adding 3D		
-// TODO: add when adding 3D		vk::raii::Image depth_image( device, depth_image_create_info );
-// TODO: add when adding 3D		
-// TODO: add when adding 3D		auto const depth_image_memory_requirements {
-// TODO: add when adding 3D			depth_image.getMemoryRequirements()
-// TODO: add when adding 3D		};
-// TODO: add when adding 3D		
-// TODO: add when adding 3D		auto const memory_properties {
-// TODO: add when adding 3D			physical_device.getMemoryProperties()
-// TODO: add when adding 3D		};
-// TODO: add when adding 3D
-// TODO: add when adding 3D		u32 const memory_type_index {
-// TODO: add when adding 3D			determineMemoryTypeIndex( memory_properties, depth_image_memory_requirements, vk::MemoryPropertyFlagBits::eDeviceLocal ); // TODO: write helper
-// TODO: add when adding 3D		};
-// TODO: add when adding 3D
-// TODO: add when adding 3D		vk::MemoryAllocateInfo const memory_allocate_info {
-// TODO: add when adding 3D			.allocationSize  = depth_image_memory_requirements.size,
-// TODO: add when adding 3D			.memoryTypeIndex = memory_type_index
-// TODO: add when adding 3D		};
-// TODO: add when adding 3D
-// TODO: add when adding 3D		vk::raii::DeviceMemory depthDeviceMemory( device, memory_allocate_info );
-
+		
+		auto const find_memory_type_index {
+			[](
+				vk::PhysicalDeviceMemoryProperties const &physical_device_memory_properties,
+				u32                                const  type_filter,
+				vk::MemoryPropertyFlags            const  memory_property_flags
+			) -> u32 {
+				for ( u32 i{0}; i<physical_device_memory_properties.memoryTypeCount; ++i ) 
+					if ( (type_filter bitand (1<<i)) and
+						  (physical_device_memory_properties.memoryTypes[i].propertyFlags bitand memory_property_flags)
+						      == memory_property_flags )
+					{
+						return i;
+					}
+				throw std::runtime_error { "Unable to find an index of a suitable memory type!" };
+			}
+		};
+		
+	// Depth buffer:
+		spdlog::info( "Creating depth image..." );
+		
+		vk::ImageCreateInfo const depth_image_create_info {
+			.imageType             = vk::ImageType::e2D,
+			.format                = vk::Format::eD16Unorm,
+			.extent                = vk::Extent3D {
+				.width                 = image_extent.width,
+				.height                = image_extent.height,
+				.depth                 = 1
+			},
+			.mipLevels             = 1,
+			.arrayLayers           = 1,
+			.samples               = {}, // TODO
+			.usage                 = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+			.sharingMode           = vk::SharingMode::eExclusive,
+			.queueFamilyIndexCount = 0,
+			.pQueueFamilyIndices   = nullptr,
+			.initialLayout         = vk::ImageLayout::eUndefined
+		};
+		
+		vk::raii::Image depth_image( device, depth_image_create_info );
+		
+		auto const depth_image_memory_requirements {
+			depth_image.getMemoryRequirements()
+		};
+		
+		auto const physical_device_memory_properties {
+			physical_device.getMemoryProperties()
+		};
+		
+		auto const depth_image_memory_type_index {
+			find_memory_type_index(
+				physical_device_memory_properties,
+				depth_image_memory_requirements.memoryTypeBits,
+				vk::MemoryPropertyFlagBits::eDeviceLocal
+			)
+		};
+		
+		vk::MemoryAllocateInfo const depth_image_memory_allocate_info {
+			.allocationSize  = depth_image_memory_requirements.size,
+			.memoryTypeIndex = depth_image_memory_type_index
+		};
+		
+		vk::raii::DeviceMemory depth_image_device_memory(
+			device,
+			depth_image_memory_allocate_info
+		);
+		
+		// TODO: ImageView for depth image?
+		
 	// Uniform buffer:
+		spdlog::info( "Creating uniform data buffer..." );
 		
 		auto const projection {
 			glm::perspective( glm::radians(45.f), 1.0f, 0.1f, 100.0f )
@@ -641,8 +667,7 @@ main()
 			glm::mat4( 1.f )
 		};
 		
-		// Vulkan clip space has inverted Y and half Z
-		auto const clip {
+		auto const clip { // Vulkan clip space has inverted Y and half Z
 			glm::mat4(
 				1.0f,  0.0f,  0.0f,  0.0f,
 				0.0f, -1.0f,  0.0f,  0.0f,
@@ -665,38 +690,40 @@ main()
 		};
 		
 		vk::raii::Buffer uniform_data_buffer( device, uniform_data_buffer_create_info );
-
-// TODO:
-#if 0
-VkMemoryRequirements mem_reqs;
-vkGetBufferMemoryRequirements(info.device, info.uniform_data.buf,
-                              &mem_reqs);
-
-VkMemoryAllocateInfo alloc_info = {};
-alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-alloc_info.pNext = NULL;
-alloc_info.memoryTypeIndex = 0;
-
-alloc_info.allocationSize = mem_reqs.size;
-pass = memory_type_from_properties(info, mem_reqs.memoryTypeBits,
-                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                   &alloc_info.memoryTypeIndex);
-
-res = vkAllocateMemory(info.device, &alloc_info, NULL,
-                       &(info.uniform_data.mem));
-
-res = vkMapMemory(info.device, info.uniform_data.mem, 0, mem_reqs.size, 0,
-                  (void **)&pData);
-
-memcpy(pData, &info.MVP, sizeof(info.MVP));
-vkUnmapMemory(info.device, info.uniform_data.mem);
-
-res = vkBindBufferMemory(info.device, info.uniform_data.buf,
-                         info.uniform_data.mem, 0);
-#endif
+		
+		vk::MemoryRequirements const uniform_data_buffer_memory_requirements {
+			uniform_data_buffer.getMemoryRequirements()
+		};
+		
+		auto const uniform_data_buffer_memory_type_index {
+			find_memory_type_index(
+				physical_device_memory_properties,
+				uniform_data_buffer_memory_requirements.memoryTypeBits,
+				vk::MemoryPropertyFlagBits::eHostVisible bitor vk::MemoryPropertyFlagBits::eHostCoherent
+			)
+		};
+		
+		vk::MemoryAllocateInfo const uniform_data_buffer_memory_allocate_info {
+			.allocationSize  = uniform_data_buffer_memory_requirements.size,
+			.memoryTypeIndex = uniform_data_buffer_memory_type_index
+		};
+		
+		vk::raii::DeviceMemory uniform_data_buffer_device_memory(
+			device,
+			uniform_data_buffer_memory_allocate_info
+		);
+		
+		{ // TODO: verify block
+			spdlog::info( "Mapping the uniform data buffer's device memory to the host device's memory so that the MVP can be uploaded..." );
+			auto *p_mapped_memory {
+				uniform_data_buffer_device_memory.mapMemory( 0, uniform_data_buffer_memory_requirements.size )
+			};
+			std::memcpy( p_mapped_memory, &mvp, sizeof(mvp) );
+			uniform_data_buffer_device_memory.unmapMemory();
+		}
 		
 	// Descriptor set binding & layout for uniform buffer:
+		spdlog::info( "Creating descriptor set layout binding for the uniform data buffer..." );
 		
 		vk::DescriptorSetLayoutBinding const uniform_data_buffer_descriptor_set_layout_binding {
 			.binding            = 0, // only making one set; index zero (TODO: read up on)
@@ -705,6 +732,8 @@ res = vkBindBufferMemory(info.device, info.uniform_data.buf,
 			.stageFlags         = vk::ShaderStageFlagBits::eVertex,
 			.pImmutableSamplers = nullptr
 		};
+		
+		spdlog::info( "Creating descriptor set layout for the uniform data buffer..." );
 		
 		vk::DescriptorSetLayoutCreateInfo const uniform_data_buffer_descriptor_set_layout_create_info {
 			.bindingCount    = 1, // only one descriptor set (TODO: verify wording)
@@ -717,6 +746,8 @@ res = vkBindBufferMemory(info.device, info.uniform_data.buf,
 		);
 		
 	// Pipeline layout:
+		spdlog::info( "Creating pipeline layout..." );
+		
 		vk::PipelineLayoutCreateInfo const pipeline_layout_create_info {
 			.setLayoutCount         = 1,
 			.pSetLayouts            = &*uniform_data_buffer_descriptor_set_layout, // TODO: verify &*
