@@ -15,6 +15,17 @@
 #include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_raii.hpp"
 
+#include <glm/common.hpp>
+#include <glm/exponential.hpp>
+#include <glm/geometric.hpp>
+#include <glm/matrix.hpp>
+#include <glm/trigonometric.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/scalar_constants.hpp>
+
 #include <iostream>
 #include <array>
 #include <optional>
@@ -523,6 +534,7 @@ main()
 			}()
 		};
 		
+#if 0 // NOTE: temporarily disabled due to segfault
 	// Swapchain:
 		auto const format { vk::Format::eA8B8G8R8UnormPack32 };
 		spdlog::info( "Creating swapchain..." );	
@@ -568,7 +580,8 @@ main()
 			image_view_create_info.image = static_cast<vk::Image>( image );
 			image_views.emplace_back( device, image_view_create_info );
 		}
-		
+#endif
+
 // TODO: add when adding 3D // Depth buffer:
 // TODO: add when adding 3D		spdlog::info( "Creating depth image..." );
 // TODO: add when adding 3D		vk::ImageCreateInfo const depth_image_create_info {
@@ -609,6 +622,115 @@ main()
 // TODO: add when adding 3D		};
 // TODO: add when adding 3D
 // TODO: add when adding 3D		vk::raii::DeviceMemory depthDeviceMemory( device, memory_allocate_info );
+
+	// Uniform buffer:
+		
+		auto const projection {
+			glm::perspective( glm::radians(45.f), 1.0f, 0.1f, 100.0f )
+		};
+		
+		auto const view {
+			glm::lookAt(
+				glm::vec3( -5,  3, -10 ), // world space camera position
+				glm::vec3(  0,  0,   0 ), // look at the origin
+				glm::vec3(  0, -1,   0 )  // head is up (remove minus?)
+			)
+		};
+		
+		auto const model {
+			glm::mat4( 1.f )
+		};
+		
+		// Vulkan clip space has inverted Y and half Z
+		auto const clip {
+			glm::mat4(
+				1.0f,  0.0f,  0.0f,  0.0f,
+				0.0f, -1.0f,  0.0f,  0.0f,
+				0.0f,  0.0f,  0.5f,  0.0f,
+				0.0f,  0.0f,  0.5f,  1.0f
+			)
+		};
+		
+		auto const mvp {
+			clip * projection * view * model
+		};
+		
+		vk::BufferCreateInfo const uniform_data_buffer_create_info {
+			.size                  = sizeof( mvp ),
+			.usage                 = vk::BufferUsageFlagBits::eUniformBuffer,
+			.sharingMode           = vk::SharingMode::eExclusive,
+			.queueFamilyIndexCount = 0,
+			.pQueueFamilyIndices   = nullptr
+			// NOTE: might need .flags
+		};
+		
+		vk::raii::Buffer uniform_data_buffer( device, uniform_data_buffer_create_info );
+
+// TODO:
+#if 0
+VkMemoryRequirements mem_reqs;
+vkGetBufferMemoryRequirements(info.device, info.uniform_data.buf,
+                              &mem_reqs);
+
+VkMemoryAllocateInfo alloc_info = {};
+alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+alloc_info.pNext = NULL;
+alloc_info.memoryTypeIndex = 0;
+
+alloc_info.allocationSize = mem_reqs.size;
+pass = memory_type_from_properties(info, mem_reqs.memoryTypeBits,
+                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                   &alloc_info.memoryTypeIndex);
+
+res = vkAllocateMemory(info.device, &alloc_info, NULL,
+                       &(info.uniform_data.mem));
+
+res = vkMapMemory(info.device, info.uniform_data.mem, 0, mem_reqs.size, 0,
+                  (void **)&pData);
+
+memcpy(pData, &info.MVP, sizeof(info.MVP));
+vkUnmapMemory(info.device, info.uniform_data.mem);
+
+res = vkBindBufferMemory(info.device, info.uniform_data.buf,
+                         info.uniform_data.mem, 0);
+#endif
+		
+	// Descriptor set binding & layout for uniform buffer:
+		
+		vk::DescriptorSetLayoutBinding const uniform_data_buffer_descriptor_set_layout_binding {
+			.binding            = 0, // only making one set; index zero (TODO: read up on)
+			.descriptorType     = vk::DescriptorType::eUniformBuffer,
+			.descriptorCount    = 1, // only one descriptor in the set
+			.stageFlags         = vk::ShaderStageFlagBits::eVertex,
+			.pImmutableSamplers = nullptr
+		};
+		
+		vk::DescriptorSetLayoutCreateInfo const uniform_data_buffer_descriptor_set_layout_create_info {
+			.bindingCount    = 1, // only one descriptor set (TODO: verify wording)
+			.pBindings       = &uniform_data_buffer_descriptor_set_layout_binding
+		};
+		
+		vk::raii::DescriptorSetLayout uniform_data_buffer_descriptor_set_layout(
+			device,
+			uniform_data_buffer_descriptor_set_layout_create_info
+		);
+		
+	// Pipeline layout:
+		vk::PipelineLayoutCreateInfo const pipeline_layout_create_info {
+			.setLayoutCount         = 1,
+			.pSetLayouts            = &*uniform_data_buffer_descriptor_set_layout, // TODO: verify &*
+			.pushConstantRangeCount = 0,      // TODO: explain purpose
+			.pPushConstantRanges    = nullptr //       ditto
+		};
+		
+		vk::raii::PipelineLayout pipeline_layout( device, pipeline_layout_create_info ); 
+		
+		// NOTE (shader usage): layout (std140, binding = 0) uniform bufferVals {
+		// NOTE (shader usage):     mat4 mvp;
+		// NOTE (shader usage): } myBufferVals;
+		
+		
 
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
