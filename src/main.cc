@@ -114,7 +114,7 @@ namespace { // unnamed namespace for file scope
 			
 			// handle success or failure:
 			if ( is_missing_layer )
-				throw std::runtime_error( "Failed to load required validation layers!" );
+				throw std::runtime_error { "Failed to load required validation layers!" };
 			else {
 				instance_create_info.enabledLayerCount   = static_cast<u32>( required_validation_layers.size() );
 				instance_create_info.ppEnabledLayerNames = required_validation_layers.data();
@@ -138,7 +138,7 @@ namespace { // unnamed namespace for file scope
 		u32  glfw_extension_count;
 		auto glfw_extension_list { glfwGetRequiredInstanceExtensions( &glfw_extension_count ) };
 		if ( glfw_extension_list == nullptr )
-			throw std::runtime_error( "Failed to get required Vulkan instance extensions!" );
+			throw std::runtime_error { "Failed to get required Vulkan instance extensions!" };
 		else {
 			// add required GLFW extensions:
 			required_extensions.reserve( glfw_extension_count );
@@ -169,7 +169,7 @@ namespace { // unnamed namespace for file scope
 			
 			// handle success or failure:
 			if ( is_missing_extension )
-				throw std::runtime_error( "Failed to load required instance extensions!" );
+				throw std::runtime_error { "Failed to load required instance extensions!" };
 			else {
 				instance_create_info.enabledExtensionCount   = static_cast<u32>( required_extensions.size() );
 				instance_create_info.ppEnabledExtensionNames = required_extensions.data();
@@ -310,7 +310,7 @@ namespace { // unnamed namespace for file scope
 				)
 			};
 			if ( search_result == std::end( properties ) )
-				throw std::runtime_error( "Could not find " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " extension!" );
+				throw std::runtime_error { "Could not find " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " extension!" };
 			
 			auto const severity_flags = vk::DebugUtilsMessageSeverityFlagsEXT(
 				vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
@@ -475,7 +475,7 @@ main()
 		vk::raii::SurfaceKHR surface( instance, surface_tmp ); 
 		
 		if ( result != VkResult::VK_SUCCESS )
-			throw std::runtime_error( "Unable to create GLFW window surface!" );
+			throw std::runtime_error { "Unable to create GLFW window surface!" };
 		
 	// Queue family indices:
 		auto const queue_family_indices {
@@ -509,7 +509,7 @@ main()
 						spdlog::info( "Selected different queue families for graphics and present." );
 					return { present_queue_family_index.value(), graphics_queue_family_index.value() };
 				}
-				else throw std::runtime_error( "Queue family support for either graphics or present missing!" );
+				else throw std::runtime_error { "Queue family support for either graphics or present missing!" };
 			}()
 		};
 		bool const is_using_separate_queue_families {
@@ -847,18 +847,18 @@ main()
 	}
 	catch ( vk::SystemError const &e ) {
 		spdlog::critical( "std::exception: {}", e.what() );
-		std::exit(EXIT_FAILURE);
+		std::exit( EXIT_FAILURE );
 	}
 	catch ( std::exception const &e ) {
 		spdlog::critical( "vk::SystemError: {}", e.what() );
-		std::exit(EXIT_FAILURE);
+		std::exit( EXIT_FAILURE );
 	}
 	catch (...) {
 		spdlog::critical( "Unknown error encountered!" );
-		std::exit(EXIT_FAILURE);
+		std::exit( EXIT_FAILURE );
 	}
 	// exiting:
-	std::exit(EXIT_SUCCESS);
+	std::exit( EXIT_SUCCESS );
 } // end-of-function: main
 
 /*
