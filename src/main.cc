@@ -52,6 +52,16 @@ using i64 = std::int64_t;
 using f32 = float;
 using f64 = double;
 
+// TODO: replace with `std::unreachable()` when it becomes available.
+# ifdef __GNUC__ // GCC 4.8+, Clang, Intel and other compilers compatible with GCC (-std=c++0x or above)
+	[[noreturn]] inline __attribute__((always_inline)) void unreachable() { __builtin_unreachable(); }
+# elif defined(_MSC_VER) // MSVC
+	[[noreturn]] __forceinline void unreachable() { __assume(false); }
+# else
+#    error Unsupported compiler! //	inline void unreachable() {}
+# endif
+
+
 bool constexpr g_is_debug_mode {
 	#if !defined( NDEBUG )
 		true
@@ -391,6 +401,7 @@ get_framebuffer_count(
 	auto const ideal_framebuffer_count {
 		static_cast<u32>( framebuffering_priority )
 	};
+	spdlog::info( "Ideal framebuffer count: {}", ideal_framebuffer_count );
 	auto const minimum_framebuffer_count {
 		surface_capabilities.minImageCount
 	};
@@ -398,12 +409,16 @@ get_framebuffer_count(
 		surface_capabilities.maxImageCount == 0 ? // handle special 0 (uncapped) case
 			ideal_framebuffer_count : surface_capabilities.maxImageCount
 	};
-	return std::clamp(
-		ideal_framebuffer_count,
-		minimum_framebuffer_count,
-		maximum_framebuffer_count
-	);
-}
+	auto result {
+		std::clamp(
+			ideal_framebuffer_count,
+			minimum_framebuffer_count,
+			maximum_framebuffer_count
+		)
+	};
+	spdlog::info( "Nearest available framebuffer count: {}", result );
+	return result;
+} // end-of-function: get_framebuffer_count
 
 enum struct PresentationPriority {
 	eMinimalLatency,        
@@ -432,6 +447,7 @@ get_present_mode(
 				case PresentationPriority::eMinimalStuttering       : return vk::PresentModeKHR::eFifoRelaxed;
 				case PresentationPriority::eMinimalPowerConsumption : return vk::PresentModeKHR::eFifo;
 			}
+			unreachable();
 		}()
 	};
 	bool const has_support_for_ideal_mode {
@@ -446,7 +462,7 @@ get_present_mode(
 		spdlog::warn( "Ideal present mode is not supported by device; using fallback present mode!" );
 		return fallback_present_mode;
 	}
-}
+} // end-of-function: get_present_mode
 
 /*
 // TODO: make generic or use existing vec type
@@ -455,6 +471,9 @@ struct V2i {
 }; // end-of-struct: V2i
 
 class Renderer {
+	struct Info {
+		// TODO
+	} info;
 	struct Config {
 		V2i             internal_render_resolution;
 		FrameBuffering  frame_buffering;
@@ -806,7 +825,7 @@ main()
 			},
 			.mipLevels             = 1,
 			.arrayLayers           = 1,
-			.samples               = {}, // TODO
+			.samples               = vk::SampleCountFlagBits::e1, // 1 sample per pixel
 			.usage                 = vk::ImageUsageFlagBits::eDepthStencilAttachment,
 			.sharingMode           = vk::SharingMode::eExclusive,
 			.queueFamilyIndexCount = 0,
@@ -957,8 +976,28 @@ main()
 		// NOTE (shader usage):     mat4 mvp;
 		// NOTE (shader usage): } myBufferVals;
 		
+	// Descriptor Pool:
+		spdlog::info( "Creating descriptor pool..." );
 		
-
+		vk::DescriptorPoolSize const descriptor_pool_sizes[1] {
+			{
+				.type            = vk::DescriptorType::eUniformBuffer,
+				.descriptorCount = 1
+			}
+		};
+		
+		vk::DescriptorPoolCreateInfo const descriptor_pool_create_info {
+			.maxSets       = 1, // TODO: comment properly
+			.poolSizeCount = 1, // TODO: comment properly
+			.pPoolSizes    = descriptor_pool_sizes
+		};
+		
+		vk::raii::DescriptorPool descriptor_pool( device, descriptor_pool_create_info );
+		
+	// ???
+		
+		
+		
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
 		
