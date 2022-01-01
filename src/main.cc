@@ -383,7 +383,7 @@ enum struct FrameBuffering: u32 {
 }; // end-of-enum-struct: Framebuffering
 
 [[nodiscard]] auto constexpr
-getFramebufferCount( FrameBuffering const fb ) noexcept
+get_framebuffer_count( FrameBuffering const fb ) noexcept
 {
 	return static_cast<u32>( fb );
 }
@@ -394,13 +394,40 @@ enum struct PresentationPriority {
 	eMinimalPowerConsumption
 };
 
-[[nodiscard]] auto constexpr
-getPresentMode( PresentationPriority const pp ) noexcept
+[[nodiscard]] auto
+get_present_mode(
+	vk::raii::PhysicalDevice const &physical_device,
+	vk::raii::SurfaceKHR     const &surface,
+	PresentationPriority     const  presentation_priority
+) noexcept
 {
-	switch ( pp ) {
-		case PresentationPriority::eMinimalLatency          : return vk::PresentModeKHR::eMailbox;
-		case PresentationPriority::eMinimalStuttering       : return vk::PresentModeKHR::eFifoRelaxed;
-		case PresentationPriority::eMinimalPowerConsumption : return vk::PresentModeKHR::eFifoRelaxed;
+	// TODO: add support for ordered priorities instead of just ideal/fallback.
+	auto const fallback_present_mode {
+		vk::PresentModeKHR::eFifo
+	};
+	auto const available_present_modes {
+		physical_device.getSurfacePresentModesKHR( *surface )
+	};
+	auto const ideal_present_mode {
+		[presentation_priority] {
+			switch ( presentation_priority ) {
+				case PresentationPriority::eMinimalLatency          : return vk::PresentModeKHR::eMailbox;
+				case PresentationPriority::eMinimalStuttering       : return vk::PresentModeKHR::eFifoRelaxed;
+				case PresentationPriority::eMinimalPowerConsumption : return vk::PresentModeKHR::eFifo;
+			}
+		}()
+	};
+	bool const has_support_for_ideal_mode {
+		std::ranges::find( available_present_modes, ideal_present_mode )
+		!= std::end( available_present_modes )
+	};
+	if ( has_support_for_ideal_mode ) {
+		spdlog::info( "Ideal present mode is supported by device!" );
+		return ideal_present_mode;
+	}
+	else {
+		spdlog::warn( "Ideal present mode is not supported by device; using fallback present mode!" );
+		return fallback_present_mode;
 	}
 }
 
@@ -633,18 +660,32 @@ main()
 		vk::raii::CommandBuffers command_buffers( device, command_buffer_allocate_info );
 		
 	// Swapchain:
-		
+
+		// Swapchain image format:
+		auto const surface_format {
+		   // TODO: refactor into select_swapchain_surface_format function
+			[&physical_device,&surface] {
+				auto const available_surface_formats {
+					physical_device.getSurfaceFormatsKHR( *surface ) // TODO: 2KHR?
+				};
+				for ( auto const &available_surface_format: available_surface_formats )
+					if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb
+					and  available_surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear )
+						return available_surface_format;
+				// TODO: add contingency decisions to fallback on
+				throw std::runtime_error { "Unable to find the desired surface format!" };	
+			}()
+		};
+			
 		// Surface capabilities: (TODO: refactor wrap)
 		auto const capabilities {
 			physical_device.getSurfaceCapabilitiesKHR( *surface ) // TODO: 2KHR?
 		};
-		
-		// Swapchain image format:
-		auto const format { vk::Format::eA8B8G8R8UnormPack32 };
-	
+			
 		// Swapchain image extent:
-		vk::Extent2D const image_extent {
-			[&p_window,&capabilities] { // TODO: refactor into get_image_extent_function
+		vk::Extent2D const surface_extent {
+			// TODO: refactor into get_image_extent function
+			[&p_window,&capabilities] {
 				vk::Extent2D result {};
 				if ( capabilities.currentExtent.height == std::numeric_limits<u32>::max() )
 					result = capabilities.currentExtent;
@@ -672,10 +713,10 @@ main()
 		// TODO: check present support	
 		vk::SwapchainCreateInfoKHR const swapchain_create_info {
 			.surface               = *surface,
-			.minImageCount         =  getFramebufferCount( FrameBuffering::eTriple ), // TODO: capabilities query & config refactor
-			.imageFormat           =  format,                                         // TODO: capabilities query & config refactor
-			.imageColorSpace       =  vk::ColorSpaceKHR::eExtendedSrgbLinearEXT,      // TODO: capabilities query & config refactor
-			.imageExtent           =  image_extent,
+			.minImageCount         =  get_framebuffer_count( FrameBuffering::eTriple ), // TODO: config refactor
+			.imageFormat           =  surface_format.format,                            // TODO: config refactor
+			.imageColorSpace       =  surface_format.colorSpace,                        // TODO: config refactor
+			.imageExtent           =  surface_extent,
 			.imageArrayLayers      =  1, // non-stereoscopic
 			.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // NOTE: change to eTransferDst if doing post-processing later
 			.imageSharingMode      =  is_using_separate_queue_families ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
@@ -683,7 +724,7 @@ main()
 			.pQueueFamilyIndices   =  is_using_separate_queue_families ?  queue_family_indices.data() : nullptr,
 			.preTransform          =  capabilities.currentTransform,
 			.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
-			.presentMode           =  getPresentMode( PresentationPriority::eMinimalStuttering ), // TODO: capabilities query & config refactor
+			.presentMode           =  get_present_mode( physical_device, surface, PresentationPriority::eMinimalStuttering ), // TODO: config refactor
 			.clipped               =  VK_TRUE,
 			.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later after implementing resizing
 		};
