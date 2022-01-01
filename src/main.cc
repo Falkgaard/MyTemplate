@@ -52,7 +52,7 @@ using i64 = std::int64_t;
 using f32 = float;
 using f64 = double;
 
-bool constexpr is_debug_mode {
+bool constexpr g_is_debug_mode {
 	#if !defined( NDEBUG )
 		true
 	#else
@@ -86,9 +86,9 @@ namespace { // unnamed namespace for file scope
 	
 	void
 	enable_validation_layers( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
-		noexcept( not is_debug_mode )
+		noexcept( not g_is_debug_mode )
 	{
-		if constexpr ( is_debug_mode ) { // logic is only required for debug builds
+		if constexpr ( g_is_debug_mode ) { // logic is only required for debug builds
 			spdlog::info( "Enabling validation layers..." );
 			auto const available_validation_layers { context.enumerateInstanceLayerProperties() };
 			// print required and available layers:
@@ -122,7 +122,7 @@ namespace { // unnamed namespace for file scope
 		}
 	} // end-of-function: enable_validation_layers
 	
-	std::vector<char const *> required_extensions {
+	std::vector<char const *> required_instance_extensions {
 		#if !defined( NDEBUG )
 			VK_EXT_DEBUG_UTILS_EXTENSION_NAME ,
 			VK_EXT_DEBUG_REPORT_EXTENSION_NAME
@@ -133,50 +133,93 @@ namespace { // unnamed namespace for file scope
 	enable_instance_extensions( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
 	{
 		spdlog::info( "Enabling instance extensions..." );
-		auto const available_extensions { context.enumerateInstanceExtensionProperties() };
-		// get required GLFW extensions:
-		u32  glfw_extension_count;
-		auto glfw_extension_list { glfwGetRequiredInstanceExtensions( &glfw_extension_count ) };
-		if ( glfw_extension_list == nullptr )
+		auto const available_instance_extensions {
+			context.enumerateInstanceExtensionProperties()
+		};
+		// get required GLFW instance extensions:
+		u32  glfw_instance_extension_count;
+		auto glfw_instance_extension_list {
+			glfwGetRequiredInstanceExtensions( &glfw_instance_extension_count )
+		};
+		if ( glfw_instance_extension_list == nullptr )
 			throw std::runtime_error { "Failed to get required Vulkan instance extensions!" };
 		else {
-			// add required GLFW extensions:
-			required_extensions.reserve( glfw_extension_count );
-			for ( i32 i=0; i<glfw_extension_count; ++i )
-				required_extensions.push_back( glfw_extension_list[i] );
+			// add required GLFW instance extensions:
+			required_instance_extensions.reserve( glfw_instance_extension_count );
+			for ( i32 i=0; i<glfw_instance_extension_count; ++i )
+				required_instance_extensions.push_back( glfw_instance_extension_list[i] );
 			
-			// print required and available extensions:
-			for ( auto const &e : required_extensions )
-				spdlog::info( "Required instance extension: `{}`", e );
-			for ( auto const &e : available_extensions )
-				spdlog::info( "Available instance extension: `{}`", e.extensionName );
+			if constexpr ( g_is_debug_mode ) {
+				// print required and available instance extensions:
+				for ( auto const &required_instance_extension: required_instance_extensions )
+					spdlog::info( "... required instance extension: `{}`", required_instance_extension );
+				for ( auto const &available_instance_extension: available_instance_extensions )
+					spdlog::info( "... available instance extension: `{}`", available_instance_extension.extensionName );
+			}
 			
-			// ensure required extensions are available:
-			bool is_missing_extension { false };
-			for ( auto const &target : required_extensions ) {
-				bool match_found { false };
-				for ( auto const &extension : available_extensions ) {
-					if ( std::strcmp( target, extension.extensionName ) == 0 ) {
-						match_found = true;
-						break;
+			// ensure required instance extensions are available:
+			bool is_adequate { true }; // assume true until proven otherwise
+			for ( auto const &required_instance_extension: required_instance_extensions ) {
+				bool is_supported { false }; // assume false until found
+				for ( auto const &available_instance_extension: available_instance_extensions ) {
+					if ( std::strcmp( required_instance_extension, available_instance_extension.extensionName ) == 0 ) {
+						is_supported = true;
+						break; // early exit
 					}
 				}
-				if ( not match_found ) {
-					is_missing_extension = true;
-					spdlog::error( "Missing instance extension: `{}`", target );
+				if ( not is_supported ) {
+					is_adequate = false;
+					spdlog::error( "Missing required instance extension: `{}`", required_instance_extension );
 				}
 			}
 			
 			// handle success or failure:
-			if ( is_missing_extension )
-				throw std::runtime_error { "Failed to load required instance extensions!" };
-			else {
-				instance_create_info.enabledExtensionCount   = static_cast<u32>( required_extensions.size() );
-				instance_create_info.ppEnabledExtensionNames = required_extensions.data();
+			if ( is_adequate ) {
+				// set create info fields:
+				instance_create_info.enabledExtensionCount   = static_cast<u32>( required_instance_extensions.size() );
+				instance_create_info.ppEnabledExtensionNames = required_instance_extensions.data();
 			}
-			// set create info fields:
+			else throw std::runtime_error { "Failed to load required instance extensions!" };
 		}
 	} // end-of-function: enable_instance_extensions
+	
+	std::array constexpr required_device_extensions {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
+	
+	[[nodiscard]] bool
+	check_device_extension_support( vk::raii::PhysicalDevice const &physical_device )
+	{
+		auto const &available_device_extensions {
+			physical_device.enumerateDeviceExtensionProperties()
+		};
+		
+		if constexpr ( g_is_debug_mode ) {
+			// print required and available device extensions:
+			for ( auto const &required_device_extension: required_device_extensions )
+				spdlog::info( "... required device extension: `{}`", required_device_extension );
+			for ( auto const &available_device_extension: available_device_extensions )
+				spdlog::info( "... available device extension: `{}`", available_device_extension.extensionName );
+		}	
+		
+		bool is_adequate { true }; // assume true until proven otherwise
+		for ( auto const &required_device_extension: required_device_extensions ) {
+			bool is_supported { false }; // assume false until found
+			for ( auto const &available_device_extension: available_device_extensions ) {
+				if ( std::strcmp( required_device_extension, available_device_extension.extensionName ) == 0 ) {
+					is_supported = true;
+					break; // early exit
+				}
+			}
+			spdlog::info(
+				"... support for required device extension `{}`: {}",
+				required_device_extension, is_supported ? "found" : "missing!"
+			);
+			if ( not is_supported )
+				is_adequate = false;
+		}
+		return is_adequate;
+	} // end-of-function: check_device_extension_support
 	
 	[[nodiscard]] u32
 	score_physical_device( vk::raii::PhysicalDevice const &physical_device )
@@ -186,15 +229,12 @@ namespace { // unnamed namespace for file scope
 		spdlog::info( "Scoring physical device `{}`...", properties.deviceName.data() );
 		u32 score { 0 };
 		
-		std::string const swapchain_extension_name {
-			VK_KHR_SWAPCHAIN_EXTENSION_NAME
+		// TODO: when more extensions are required, refactor extension check out into its own function
+		bool const is_meeting_device_extension_requirements {
+			check_device_extension_support( physical_device )
 		};
-		bool has_swapchain_support { false };
-		for ( auto const &extension: physical_device.enumerateDeviceExtensionProperties() )
-			if ( extension.extensionName == swapchain_extension_name )
-				has_swapchain_support = true;
-		if ( not has_swapchain_support )
-			spdlog::info( "... swapchain support: false" );
+		if ( not is_meeting_device_extension_requirements )
+			spdlog::info( "... device extension support: insufficient!" );
 		else if ( features.geometryShader == VK_FALSE )
 			spdlog::info( "... geometry shader support: false" );
 		else {
@@ -397,7 +437,7 @@ main()
 		MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH
 	);
 	
-	if constexpr ( is_debug_mode ) {
+	if constexpr ( g_is_debug_mode ) {
 		spdlog::set_level( spdlog::level::debug );
 		spdlog::info( "Build: DEBUG" );
 	}
@@ -479,7 +519,7 @@ main()
 		
 	// Queue family indices:
 		auto const queue_family_indices {
-			[&physical_device,&surface]() -> std::array<u32,2> {
+			[&physical_device,&surface]() -> std::array<u32,2> { // TODO: refactor into free function(s)
 				std::optional<u32> present_queue_family_index  {};
 				std::optional<u32> graphics_queue_family_index {};
 				auto const &queue_family_properties {
@@ -512,32 +552,75 @@ main()
 				else throw std::runtime_error { "Queue family support for either graphics or present missing!" };
 			}()
 		};
+		
+		auto const &present_queue_family_index {
+			queue_family_indices[0]
+		};
+		
+		auto const &graphics_queue_family_index {
+			queue_family_indices[1]
+		};
+		
 		bool const is_using_separate_queue_families {
-			queue_family_indices[0] != queue_family_indices[1]
+			present_queue_family_index != graphics_queue_family_index
 		};
 		
 	// Logical device:
-		u32 const graphics_queue_count    {  1  };
-		f32 const graphics_queue_priority { .0f };
-		vk::DeviceQueueCreateInfo const graphics_device_queue_create_info {
-			.queueFamilyIndex =  queue_family_indices[1], // TODO: refactor
-			.queueCount       =  graphics_queue_count,
-			.pQueuePriorities = &graphics_queue_priority
-		};
+		
+		// TODO: refactor approach when more queues are needed
+		std::vector<vk::DeviceQueueCreateInfo> device_queue_create_infos {};
+		
+		{
+			f32 const present_queue_priority { 1.0f };
+			device_queue_create_infos.push_back(
+				vk::DeviceQueueCreateInfo {
+					.queueFamilyIndex =  present_queue_family_index,
+					.queueCount       =  1,
+					.pQueuePriorities = &present_queue_priority
+				}
+			);
+			
+			if ( is_using_separate_queue_families ) {
+				f32 const graphics_queue_priority { 1.0f };
+				device_queue_create_infos.push_back(
+					vk::DeviceQueueCreateInfo {
+						.queueFamilyIndex =  graphics_queue_family_index,
+						.queueCount       =  1,
+						.pQueuePriorities = &graphics_queue_priority
+					}
+				);
+			}
+		}
+		
 		spdlog::info( "Creating logical device..." );
 		vk::DeviceCreateInfo const graphics_device_create_info {
-			.queueCreateInfoCount =  1,
-			.pQueueCreateInfos    = &graphics_device_queue_create_info
-			// TODO: add more?
+			.queueCreateInfoCount    = static_cast<u32>( device_queue_create_infos.size() ),
+			.pQueueCreateInfos       = device_queue_create_infos.data(),
+			.enabledLayerCount       = 0,       // no longer used; TODO: add conditionally to support older versions?
+			.ppEnabledLayerNames     = nullptr, // ^ ditto
+			.enabledExtensionCount   = static_cast<u32>( required_device_extensions.size() ),
+			.ppEnabledExtensionNames = required_device_extensions.data()
 		};
 		vk::raii::Device device( physical_device, graphics_device_create_info );
+	
+	// Graphics queue:
+		spdlog::info( "Getting graphics queue handle..." );
+		auto graphics_queue {
+			device.getQueue( graphics_queue_family_index, 0 ) // NOTE: 0 since we only use one queue for now
+		};
+ 	
+	 // Present queue:
+		spdlog::info( "Getting present queue handle..." );
+		auto present_queue {
+			device.getQueue( present_queue_family_index, 0 ) // NOTE: 0 since we only use one queue for now
+		};
 		
 	// Command buffer(s):
 		spdlog::info( "Creating command buffer pool..." );
 		vk::CommandPoolCreateInfo const command_pool_create_info {
 			// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
 			//       Also, one pool would be needed for each queue family (if ever extended).
-			.queueFamilyIndex = queue_family_indices[1] // TODO: refactor
+			.queueFamilyIndex = graphics_queue_family_index
 		};
 		vk::raii::CommandPool command_pool( device, command_pool_create_info );
 		u32 const command_buffer_count { 1 };
@@ -548,13 +631,18 @@ main()
 			.commandBufferCount =  command_buffer_count              // NOTE: extend here if needed
 		};
 		vk::raii::CommandBuffers command_buffers( device, command_buffer_allocate_info );
-
-	// Capabilities: (TODO: refactor wrap)
+		
+	// Swapchain:
+		
+		// Surface capabilities: (TODO: refactor wrap)
 		auto const capabilities {
 			physical_device.getSurfaceCapabilitiesKHR( *surface ) // TODO: 2KHR?
 		};
 		
-	// Extent:
+		// Swapchain image format:
+		auto const format { vk::Format::eA8B8G8R8UnormPack32 };
+	
+		// Swapchain image extent:
 		vk::Extent2D const image_extent {
 			[&p_window,&capabilities] { // TODO: refactor into get_image_extent_function
 				vk::Extent2D result {};
@@ -578,10 +666,8 @@ main()
 				}
 				return result;
 			}()
-		};
+		};	
 		
-	// Swapchain:
-		auto const format { vk::Format::eA8B8G8R8UnormPack32 };
 		spdlog::info( "Creating swapchain..." );
 		// TODO: check present support	
 		vk::SwapchainCreateInfoKHR const swapchain_create_info {
@@ -602,8 +688,6 @@ main()
 			.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later after implementing resizing
 		};
 		vk::raii::SwapchainKHR swapchain( device, swapchain_create_info );
-		
-		// NOTE: segmentation fault here (TODO: fix if not solved with the upcoming code)
 		
 	// Image views:
 		spdlog::info( "Creating image views..." );
