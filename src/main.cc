@@ -392,7 +392,7 @@ enum struct FramebufferingPriority: u32 {
 	eTriple = 3 
 }; // end-of-enum-struct: FramebufferingPriority
 
-[[nodiscard]] auto constexpr
+[[nodiscard]] auto
 get_framebuffer_count(
 	vk::SurfaceCapabilitiesKHR const &surface_capabilities,
 	FramebufferingPriority     const  framebuffering_priority
@@ -1057,9 +1057,9 @@ main()
 		
 		for ( u32 i{0}; i<swapchain_framebuffer_count; ++i ) {
 			vk::DescriptorBufferInfo const descriptor_buffer_info {
-				.buffer = uniform_data_buffer[i], // TODO!!!!
-				.offset = 0,
-				.range  = sizeof( glm::mat4 )
+				.buffer = *uniform_data_buffer, // TODO!!!! should be array
+				.offset =  0,
+				.range  =  sizeof( glm::mat4 )
 			};
 		}
 
