@@ -376,16 +376,26 @@ namespace { // unnamed namespace for file scope
 } // end-of-namespace: <unnamed>
 
 // NOTE: value corresponds to number of frames to allow for static casting
-enum struct FrameBuffering: u32 {
+enum struct FramebufferingPriority: u32 {
 	eSingle = 1,
 	eDouble = 2,
 	eTriple = 3 
-}; // end-of-enum-struct: Framebuffering
+}; // end-of-enum-struct: FramebufferingPriority
 
 [[nodiscard]] auto constexpr
-get_framebuffer_count( FrameBuffering const fb ) noexcept
+get_framebuffer_count(
+	vk::SurfaceCapabilitiesKHR const &surface_capabilities,
+	FramebufferingPriority     const  framebuffering_priority
+) noexcept
 {
-	return static_cast<u32>( fb );
+	auto const ideal_framebuffer_count {
+		static_cast<u32>( framebuffering_priority )
+	};
+	return std::clamp(
+		ideal_framebuffer_count,
+		surface_capabilities.minImageCount,
+		surface_capabilities.maxImageCount
+	);
 }
 
 enum struct PresentationPriority {
@@ -669,8 +679,8 @@ main()
 					physical_device.getSurfaceFormatsKHR( *surface ) // TODO: 2KHR?
 				};
 				for ( auto const &available_surface_format: available_surface_formats )
-					if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb
-					and  available_surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear )
+					if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb // TODO: refactor out
+					and  available_surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) // ^ ditto
 						return available_surface_format;
 				// TODO: add contingency decisions to fallback on
 				throw std::runtime_error { "Unable to find the desired surface format!" };	
@@ -678,53 +688,61 @@ main()
 		};
 			
 		// Surface capabilities: (TODO: refactor wrap)
-		auto const capabilities {
+		auto const surface_capabilities {
 			physical_device.getSurfaceCapabilitiesKHR( *surface ) // TODO: 2KHR?
 		};
 			
 		// Swapchain image extent:
 		vk::Extent2D const surface_extent {
 			// TODO: refactor into get_image_extent function
-			[&p_window,&capabilities] {
+			[&p_window,&surface_capabilities] {
 				vk::Extent2D result {};
-				if ( capabilities.currentExtent.height == std::numeric_limits<u32>::max() )
-					result = capabilities.currentExtent;
+				if ( surface_capabilities.currentExtent.height == std::numeric_limits<u32>::max() )
+					result = surface_capabilities.currentExtent;
 				else {
 					int width, height;
 					glfwGetWindowSize( p_window, &width, &height );
 					result.width =
 						std::clamp(
 							static_cast<u32>(width),
-							capabilities.minImageExtent.width,
-							capabilities.maxImageExtent.width
+							surface_capabilities.minImageExtent.width,
+							surface_capabilities.maxImageExtent.width
 						);
 					result.height =
 						std::clamp(
 							static_cast<u32>(height),
-							capabilities.minImageExtent.height,
-							capabilities.maxImageExtent.height
+							surface_capabilities.minImageExtent.height,
+							surface_capabilities.maxImageExtent.height
 						);
 				}
 				return result;
 			}()
-		};	
+		};
+		
+		auto const swapchain_present_mode {
+			get_present_mode( physical_device, surface, PresentationPriority::eMinimalStuttering )
+		};
+		
+		auto const swapchain_framebuffer_count {
+			get_framebuffer_count( surface_capabilities, FramebufferingPriority::eTriple )	
+		};
 		
 		spdlog::info( "Creating swapchain..." );
 		// TODO: check present support	
 		vk::SwapchainCreateInfoKHR const swapchain_create_info {
 			.surface               = *surface,
-			.minImageCount         =  get_framebuffer_count( FrameBuffering::eTriple ), // TODO: config refactor
-			.imageFormat           =  surface_format.format,                            // TODO: config refactor
-			.imageColorSpace       =  surface_format.colorSpace,                        // TODO: config refactor
+			.minImageCount         =  swapchain_framebuffer_count, // TODO: config refactor
+			.imageFormat           =  surface_format.format,       // TODO: config refactor
+			.imageColorSpace       =  surface_format.colorSpace,   // TODO: config refactor
 			.imageExtent           =  surface_extent,
 			.imageArrayLayers      =  1, // non-stereoscopic
 			.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // NOTE: change to eTransferDst if doing post-processing later
 			.imageSharingMode      =  is_using_separate_queue_families ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
 			.queueFamilyIndexCount =  is_using_separate_queue_families ?                           2u : 0u,
 			.pQueueFamilyIndices   =  is_using_separate_queue_families ?  queue_family_indices.data() : nullptr,
-			.preTransform          =  capabilities.currentTransform,
+			.preTransform          =  surface_capabilities.currentTransform,
 			.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
-			.presentMode           =  get_present_mode( physical_device, surface, PresentationPriority::eMinimalStuttering ), // TODO: config refactor
+			.presentMode           =  swapchain_present_mode, // TODO: config refactor
 			.clipped               =  VK_TRUE,
 			.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later after implementing resizing
 		};
