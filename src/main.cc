@@ -398,6 +398,7 @@ get_framebuffer_count(
 	FramebufferingPriority     const  framebuffering_priority
 ) noexcept
 {
+	// TODO: maybe add 1 to the ideal framebuffer count..?
 	auto const ideal_framebuffer_count {
 		static_cast<u32>( framebuffering_priority )
 	};
@@ -775,20 +776,20 @@ main()
 		vk::raii::SwapchainKHR swapchain( device, swapchain_create_info );
 		
 	// Image views:
-		spdlog::info( "Creating swapchain framebuffer image views..." );
+		spdlog::info( "Creating swapchain framebuffer image view(s)..." );
 		auto swapchain_images { swapchain.getImages() };
 		std::vector<vk::raii::ImageView> image_views;
 		image_views.reserve( std::size( swapchain_images ) );
 		vk::ImageViewCreateInfo image_view_create_info {
-			.viewType          = vk::ImageViewType::e2D,
-			.format            = surface_format.format, // TODO: verify
-			.subresourceRange  = vk::ImageSubresourceRange {
-				.aspectMask     = vk::ImageAspectFlagBits::eColor,
-				.baseMipLevel   = 0u,
-				.levelCount     = 1u,
-				.baseArrayLayer = 0u,
-				.layerCount     = 1u
-			}
+			.viewType         = vk::ImageViewType::e2D,
+			.format           = surface_format.format, // TODO: verify
+			.subresourceRange = vk::ImageSubresourceRange {
+			                     .aspectMask     = vk::ImageAspectFlagBits::eColor,
+			                     .baseMipLevel   = 0u,
+			                     .levelCount     = 1u,
+			                     .baseArrayLayer = 0u,
+			                     .layerCount     = 1u
+			                  }
 		};
 		for ( auto const &image: swapchain_images ) {
 			image_view_create_info.image = static_cast<vk::Image>( image );
@@ -813,16 +814,21 @@ main()
 		};
 		
 	// Depth buffer:
-		spdlog::info( "Creating depth buffer image..." );
+		spdlog::info( "Creating depth buffer image(s)..." );
+		// TODO: Look into more efficient allocation (batch allocation)
+		// NOTE: The vectors in this section are so that each framebuffer will have it's own depth buffer.
+		// NOTE: If the memory overhead ends up too expensive,
+		//       the renderpass can be made to use only a single depth buffer
+		//       for all framebuffers, however this would likely affect performance.
 		
 		vk::ImageCreateInfo const depth_buffer_image_create_info {
 			.imageType             = vk::ImageType::e2D,
 			.format                = vk::Format::eD16Unorm, // TODO: query support?
 			.extent                = vk::Extent3D {
-				.width              = surface_extent.width,
-				.height             = surface_extent.height,
-				.depth              = 1
-			},
+			                          .width  = surface_extent.width,
+			                          .height = surface_extent.height,
+			                          .depth  = 1
+			                       },
 			.mipLevels             = 1, // no mipmapping
 			.arrayLayers           = 1,
 			.samples               = vk::SampleCountFlagBits::e1, // 1 sample per pixel (no MSAA; TODO: revisit later?)
@@ -834,10 +840,15 @@ main()
 			.initialLayout         = vk::ImageLayout::eUndefined
 		};
 		
-		vk::raii::Image depth_buffer_image( device, depth_buffer_image_create_info );
+		std::vector<vk::raii::Image> depth_buffer_images {};
+		// NOTE: one depth buffer per swapchain framebuffer image
+		depth_buffer_images.reserve( swapchain_framebuffer_count );
+		for ( u32 i{0}; i<swapchain_framebuffer_count; ++i )
+			depth_buffer_images.emplace_back( device, depth_buffer_image_create_info );
 		
+		// NOTE: since they're all identical, we just use the front image here	
 		auto const depth_buffer_image_memory_requirements {
-			depth_buffer_image.getMemoryRequirements()
+			depth_buffer_images.front().getMemoryRequirements() 
 		};
 		
 		auto const physical_device_memory_properties {
@@ -857,30 +868,36 @@ main()
 			.memoryTypeIndex = depth_buffer_image_memory_type_index
 		};
 		
-		vk::raii::DeviceMemory depth_buffer_image_device_memory(
-			device,
-			depth_buffer_image_memory_allocate_info
-		);
+		std::vector<vk::raii::DeviceMemory> depth_buffer_image_device_memories {};
+		// NOTE: one device memory per depth buffer
+		depth_buffer_image_device_memories.reserve( swapchain_framebuffer_count );
+		for ( u32 i{0}; i<swapchain_framebuffer_count; ++i )
+			depth_buffer_image_device_memories.emplace_back( device, depth_buffer_image_memory_allocate_info );
+		
+		// TODO: descriptor sets stuff?
 		
 	// Depth buffer image view:
-		spdlog::info( "Creating depth buffer image view..." );
+		spdlog::info( "Creating depth buffer image view(s)..." );
 		vk::ImageViewCreateInfo depth_buffer_image_view_create_info {
-			.image               = *depth_buffer_image,
-			.viewType            =  vk::ImageViewType::e2D,
-			.format              =  surface_format.format, // TODO: verify
-			.subresourceRange    =  vk::ImageSubresourceRange {
-				.aspectMask       =  vk::ImageAspectFlagBits::eDepth,
-				.baseMipLevel     =  0u,
-				.levelCount       =  1u,
-				.baseArrayLayer   =  0u,
-				.layerCount       =  1u
-			}
+		//	.image will be set afterwards in a for-loop
+			.viewType         =  vk::ImageViewType::e2D,
+			.format           =  surface_format.format, // TODO: verify
+			.subresourceRange =  vk::ImageSubresourceRange {
+			                        .aspectMask     = vk::ImageAspectFlagBits::eDepth,
+			                        .baseMipLevel   = 0u,
+			                        .levelCount     = 1u,
+			                        .baseArrayLayer = 0u,
+			                        .layerCount     = 1u
+			                     }
 		};
 		
-		vk::raii::ImageView depth_buffer_image_view(
-			device,
-			depth_buffer_image_view_create_info
-		);
+		std::vector<vk::raii::ImageView> depth_buffer_image_views {};
+		// NOTE: one image view per depth buffer
+		depth_buffer_image_views.reserve( swapchain_framebuffer_count );
+		for ( u32 i{0}; i<swapchain_framebuffer_count; ++i ) {
+			depth_buffer_image_view_create_info.image = *depth_buffer_images[i];
+			depth_buffer_image_views.emplace_back( device, depth_buffer_image_view_create_info );
+		}	
 		
 		// TODO: renderpass stuff + subpass stuff, etc ASAP
 		
