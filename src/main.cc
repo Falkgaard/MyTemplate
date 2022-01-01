@@ -961,7 +961,6 @@ main()
 	// Descriptor set binding & layout for uniform buffer:
 		spdlog::info( "Creating descriptor set layout binding for the uniform data buffer..." );
 		
-		u32 constexpr 
 		vk::DescriptorSetLayoutBinding const uniform_data_buffer_descriptor_set_layout_binding {
 			.binding            = 0, // only making one set; index zero (TODO: read up on)
 			.descriptorType     = vk::DescriptorType::eUniformBuffer,
