@@ -1077,11 +1077,11 @@ main()
 		glfwTerminate();
 	}
 	catch ( vk::SystemError const &e ) {
-		spdlog::critical( "std::exception: {}", e.what() );
+		spdlog::critical( "vk::SystemError: {}", e.what() );
 		std::exit( EXIT_FAILURE );
 	}
 	catch ( std::exception const &e ) {
-		spdlog::critical( "vk::SystemError: {}", e.what() );
+		spdlog::critical( "std::exception: {}", e.what() );
 		std::exit( EXIT_FAILURE );
 	}
 	catch (...) {
