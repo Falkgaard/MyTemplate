@@ -1048,7 +1048,7 @@ main()
 		// Depth Buffer
 		// Uniform Buffer
 		// Pipeline Layout
-		// Desciptor Set
+		// Descriptor Set
 		// Render Pass
 		// Shaders
 		// Framebuffers
