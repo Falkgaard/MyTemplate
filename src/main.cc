@@ -775,19 +775,19 @@ main()
 		vk::raii::SwapchainKHR swapchain( device, swapchain_create_info );
 		
 	// Image views:
-		spdlog::info( "Creating image views..." );
+		spdlog::info( "Creating swapchain framebuffer image views..." );
 		auto swapchain_images { swapchain.getImages() };
 		std::vector<vk::raii::ImageView> image_views;
 		image_views.reserve( std::size( swapchain_images ) );
 		vk::ImageViewCreateInfo image_view_create_info {
-			.viewType         = vk::ImageViewType::e2D,
-			.format           = surface_format.format, // TODO: verify
-			.subresourceRange = vk::ImageSubresourceRange {
-				.aspectMask       = vk::ImageAspectFlagBits::eColor,
-				.baseMipLevel     = 0u,
-				.levelCount       = 1u,
-				.baseArrayLayer   = 0u,
-				.layerCount       = 1u
+			.viewType          = vk::ImageViewType::e2D,
+			.format            = surface_format.format, // TODO: verify
+			.subresourceRange  = vk::ImageSubresourceRange {
+				.aspectMask     = vk::ImageAspectFlagBits::eColor,
+				.baseMipLevel   = 0u,
+				.levelCount     = 1u,
+				.baseArrayLayer = 0u,
+				.layerCount     = 1u
 			}
 		};
 		for ( auto const &image: swapchain_images ) {
@@ -813,19 +813,20 @@ main()
 		};
 		
 	// Depth buffer:
-		spdlog::info( "Creating depth image..." );
+		spdlog::info( "Creating depth buffer image..." );
 		
-		vk::ImageCreateInfo const depth_image_create_info {
+		vk::ImageCreateInfo const depth_buffer_image_create_info {
 			.imageType             = vk::ImageType::e2D,
 			.format                = vk::Format::eD16Unorm, // TODO: query support?
 			.extent                = vk::Extent3D {
-				.width                 = surface_extent.width,
-				.height                = surface_extent.height,
-				.depth                 = 1
+				.width              = surface_extent.width,
+				.height             = surface_extent.height,
+				.depth              = 1
 			},
-			.mipLevels             = 1,
+			.mipLevels             = 1, // no mipmapping
 			.arrayLayers           = 1,
-			.samples               = vk::SampleCountFlagBits::e1, // 1 sample per pixel
+			.samples               = vk::SampleCountFlagBits::e1, // 1 sample per pixel (no MSAA; TODO: revisit later?)
+			.tiling                = vk::ImageTiling::eOptimal,
 			.usage                 = vk::ImageUsageFlagBits::eDepthStencilAttachment,
 			.sharingMode           = vk::SharingMode::eExclusive,
 			.queueFamilyIndexCount = 0,
@@ -833,35 +834,55 @@ main()
 			.initialLayout         = vk::ImageLayout::eUndefined
 		};
 		
-		vk::raii::Image depth_image( device, depth_image_create_info );
+		vk::raii::Image depth_buffer_image( device, depth_buffer_image_create_info );
 		
-		auto const depth_image_memory_requirements {
-			depth_image.getMemoryRequirements()
+		auto const depth_buffer_image_memory_requirements {
+			depth_buffer_image.getMemoryRequirements()
 		};
 		
 		auto const physical_device_memory_properties {
 			physical_device.getMemoryProperties()
 		};
 		
-		auto const depth_image_memory_type_index {
+		auto const depth_buffer_image_memory_type_index {
 			find_memory_type_index(
 				physical_device_memory_properties,
-				depth_image_memory_requirements.memoryTypeBits,
+				depth_buffer_image_memory_requirements.memoryTypeBits,
 				vk::MemoryPropertyFlagBits::eDeviceLocal
 			)
 		};
 		
-		vk::MemoryAllocateInfo const depth_image_memory_allocate_info {
-			.allocationSize  = depth_image_memory_requirements.size,
-			.memoryTypeIndex = depth_image_memory_type_index
+		vk::MemoryAllocateInfo const depth_buffer_image_memory_allocate_info {
+			.allocationSize  = depth_buffer_image_memory_requirements.size,
+			.memoryTypeIndex = depth_buffer_image_memory_type_index
 		};
 		
-		vk::raii::DeviceMemory depth_image_device_memory(
+		vk::raii::DeviceMemory depth_buffer_image_device_memory(
 			device,
-			depth_image_memory_allocate_info
+			depth_buffer_image_memory_allocate_info
 		);
 		
-		// TODO: ImageView for depth image?
+	// Depth buffer image view:
+		spdlog::info( "Creating depth buffer image view..." );
+		vk::ImageViewCreateInfo depth_buffer_image_view_create_info {
+			.image               = *depth_buffer_image,
+			.viewType            =  vk::ImageViewType::e2D,
+			.format              =  surface_format.format, // TODO: verify
+			.subresourceRange    =  vk::ImageSubresourceRange {
+				.aspectMask       =  vk::ImageAspectFlagBits::eDepth,
+				.baseMipLevel     =  0u,
+				.levelCount       =  1u,
+				.baseArrayLayer   =  0u,
+				.layerCount       =  1u
+			}
+		};
+		
+		vk::raii::ImageView depth_buffer_image_view(
+			device,
+			depth_buffer_image_view_create_info
+		);
+		
+		// TODO: renderpass stuff + subpass stuff, etc ASAP
 		
 	// Uniform buffer:
 		spdlog::info( "Creating uniform data buffer..." );
@@ -940,12 +961,13 @@ main()
 	// Descriptor set binding & layout for uniform buffer:
 		spdlog::info( "Creating descriptor set layout binding for the uniform data buffer..." );
 		
+		u32 constexpr 
 		vk::DescriptorSetLayoutBinding const uniform_data_buffer_descriptor_set_layout_binding {
 			.binding            = 0, // only making one set; index zero (TODO: read up on)
 			.descriptorType     = vk::DescriptorType::eUniformBuffer,
 			.descriptorCount    = 1, // only one descriptor in the set
 			.stageFlags         = vk::ShaderStageFlagBits::eVertex,
-			.pImmutableSamplers = nullptr
+			.pImmutableSamplers = nullptr // NOTE: ignore until later:w
 		};
 		
 		spdlog::info( "Creating descriptor set layout for the uniform data buffer..." );
@@ -976,9 +998,10 @@ main()
 		// NOTE (shader usage):     mat4 mvp;
 		// NOTE (shader usage): } myBufferVals;
 		
-	// Descriptor Pool:
+	// Descriptor pool:
 		spdlog::info( "Creating descriptor pool..." );
 		
+		// TODO: std::array?
 		vk::DescriptorPoolSize const descriptor_pool_sizes[1] {
 			{
 				.type            = vk::DescriptorType::eUniformBuffer,
@@ -994,9 +1017,29 @@ main()
 		
 		vk::raii::DescriptorPool descriptor_pool( device, descriptor_pool_create_info );
 		
-	// ???
+	// Descriptor set(s):
+		spdlog::info( "Allocating descriptor set(s)..." );	
 		
+		vk::DescriptorSetAllocateInfo const descriptor_set_allocate_info {
+			.descriptorPool     =  *descriptor_pool,
+			.descriptorSetCount =   swapchain_framebuffer_count,
+			.pSetLayouts        = &*uniform_data_buffer_descriptor_set_layout // TODO: array
+		};
 		
+		auto descriptor_sets {
+			device.allocateDescriptorSets( descriptor_set_allocate_info )
+		};
+		
+		for ( u32 i{0}; i<swapchain_framebuffer_count; ++i ) {
+			vk::DescriptorBufferInfo const descriptor_buffer_info {
+				.buffer = uniform_data_buffer[i],
+				.offset = 0,
+				.range  = sizeof( glm::mat4 )
+			};
+		}
+
+		// TODO: make recreate_swapchain function
+		// TODO: make update_uniform_buffer function
 		
 ///////////////////////////////////////////////////////////////////////////////////////
 		// the big TODO
