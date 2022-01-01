@@ -391,10 +391,17 @@ get_framebuffer_count(
 	auto const ideal_framebuffer_count {
 		static_cast<u32>( framebuffering_priority )
 	};
+	auto const minimum_framebuffer_count {
+		surface_capabilities.minImageCount
+	};
+	auto const maximum_framebuffer_count {
+		surface_capabilities.maxImageCount == 0 ? // handle special 0 (uncapped) case
+			ideal_framebuffer_count : surface_capabilities.maxImageCount
+	};
 	return std::clamp(
 		ideal_framebuffer_count,
-		surface_capabilities.minImageCount,
-		surface_capabilities.maxImageCount
+		minimum_framebuffer_count,
+		maximum_framebuffer_count
 	);
 }
 
