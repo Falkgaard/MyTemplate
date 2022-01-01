@@ -209,15 +209,15 @@ namespace { // unnamed namespace for file scope
 				spdlog::info( "... type: integrated" );
 			}
 			// TODO: add more things if needed
-			spdlog::info( "... final score: {}!", score );
+			spdlog::info( "... final score: {}", score );
 		}
 		return score;
 	} // end-of-function: score_physical_device
 	
 	vk::raii::PhysicalDevice
-	pick_physical_device( vk::raii::Instance &instance )
+	select_physical_device( vk::raii::Instance &instance )
 	{
-		spdlog::info( "Selecting most suitable physical device..." );
+		spdlog::info( "Selecting the most suitable physical device..." );
 		vk::raii::PhysicalDevices physical_devices( instance );
 		spdlog::info( "Found {} physical device(s)...", physical_devices.size() + 1 );
 		if ( physical_devices.empty() )
@@ -243,13 +243,13 @@ namespace { // unnamed namespace for file scope
 		
 		if ( best_score > 0 ) {
 			spdlog::info(
-				"Selected physical device `{}` with final score of: {}",
+				"Selected physical device `{}` with a final score of: {}",
 				p_best_match->getProperties().deviceName.data(), best_score
 			);
 			return std::move( *p_best_match );
 		}
 		else throw std::runtime_error { "Physical device does not support swapchains!" };
-	} // end-of-function: pick_physical_device
+	} // end-of-function: select_physical_device
 	
 	#if !defined( NDEBUG )
 		VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -456,7 +456,7 @@ main()
 		
 	// Physical device:	
 		auto physical_device {
-			pick_physical_device( instance )
+			select_physical_device( instance )
 		};
 		
 	// Window:
