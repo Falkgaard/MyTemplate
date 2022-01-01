@@ -816,6 +816,7 @@ main()
 	// Depth buffer:
 		spdlog::info( "Creating depth buffer image(s)..." );
 		// TODO: Look into more efficient allocation (batch allocation)
+		// TODO: unify image creation with a helper function
 		// NOTE: The vectors in this section are so that each framebuffer will have it's own depth buffer.
 		// NOTE: If the memory overhead ends up too expensive,
 		//       the renderpass can be made to use only a single depth buffer
@@ -823,7 +824,7 @@ main()
 		
 		vk::ImageCreateInfo const depth_buffer_image_create_info {
 			.imageType             = vk::ImageType::e2D,
-			.format                = vk::Format::eD16Unorm, // TODO: query support?
+			.format                = vk::Format::eD16Unorm, // TODO: query support
 			.extent                = vk::Extent3D {
 			                          .width  = surface_extent.width,
 			                          .height = surface_extent.height,
@@ -855,6 +856,7 @@ main()
 			physical_device.getMemoryProperties()
 		};
 		
+		// NOTE: this will be used for all depth buffer allocations
 		auto const depth_buffer_image_memory_type_index {
 			find_memory_type_index(
 				physical_device_memory_properties,
@@ -863,6 +865,7 @@ main()
 			)
 		};
 		
+		// NOTE: this will be used for all depth buffer allocations
 		vk::MemoryAllocateInfo const depth_buffer_image_memory_allocate_info {
 			.allocationSize  = depth_buffer_image_memory_requirements.size,
 			.memoryTypeIndex = depth_buffer_image_memory_type_index
@@ -870,9 +873,13 @@ main()
 		
 		std::vector<vk::raii::DeviceMemory> depth_buffer_image_device_memories {};
 		// NOTE: one device memory per depth buffer
+		// TODO: unify depth buffer data in some POD struct
 		depth_buffer_image_device_memories.reserve( swapchain_framebuffer_count );
-		for ( u32 i{0}; i<swapchain_framebuffer_count; ++i )
+		// allocate and bind memory for each depth buffer image:
+		for ( u32 i{0}; i<swapchain_framebuffer_count; ++i ) {
 			depth_buffer_image_device_memories.emplace_back( device, depth_buffer_image_memory_allocate_info );
+			depth_buffer_images[i].bindMemory( *depth_buffer_image_device_memories[i], 0 );
+		}
 		
 		// TODO: descriptor sets stuff?
 		
@@ -881,7 +888,7 @@ main()
 		vk::ImageViewCreateInfo depth_buffer_image_view_create_info {
 		//	.image will be set afterwards in a for-loop
 			.viewType         = vk::ImageViewType::e2D,
-			.format           = surface_format.format, // TODO: verify
+			.format           = vk::Format::eD16Unorm, // TODO: query support
 			.subresourceRange = vk::ImageSubresourceRange {
 			                       .aspectMask     = vk::ImageAspectFlagBits::eDepth,
 			                       .baseMipLevel   = 0u,
