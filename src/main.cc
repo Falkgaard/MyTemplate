@@ -880,15 +880,15 @@ main()
 		spdlog::info( "Creating depth buffer image view(s)..." );
 		vk::ImageViewCreateInfo depth_buffer_image_view_create_info {
 		//	.image will be set afterwards in a for-loop
-			.viewType         =  vk::ImageViewType::e2D,
-			.format           =  surface_format.format, // TODO: verify
-			.subresourceRange =  vk::ImageSubresourceRange {
-			                        .aspectMask     = vk::ImageAspectFlagBits::eDepth,
-			                        .baseMipLevel   = 0u,
-			                        .levelCount     = 1u,
-			                        .baseArrayLayer = 0u,
-			                        .layerCount     = 1u
-			                     }
+			.viewType         = vk::ImageViewType::e2D,
+			.format           = surface_format.format, // TODO: verify
+			.subresourceRange = vk::ImageSubresourceRange {
+			                       .aspectMask     = vk::ImageAspectFlagBits::eDepth,
+			                       .baseMipLevel   = 0u,
+			                       .levelCount     = 1u,
+			                       .baseArrayLayer = 0u,
+			                       .layerCount     = 1u
+			                    }
 		};
 		
 		std::vector<vk::raii::ImageView> depth_buffer_image_views {};
