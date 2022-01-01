@@ -33,3 +33,9 @@ vkBeginCommandBuffer()
 vkCmd???()
 vkEndCommandBuffer()
 vkQueueSubmit()
+
+## Misc
+
+Extend the CMake build process (e.g. move the shader compilation there)
+Add tests
+Add log files
