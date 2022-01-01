@@ -1058,28 +1058,6 @@ main()
 		// TODO: make update_uniform_buffer function
 		
 ///////////////////////////////////////////////////////////////////////////////////////
-		// the big TODO
-		
-		// Swapchain
-		// Image View
-		// Depth Buffer
-		// Uniform Buffer
-		// Pipeline Layout
-		// Descriptor Set
-		// Render Pass
-		// Shaders
-		// Framebuffers
-		// Vertex buffer
-		// Pipeline
-		
-		// ...
-		
-		// vkBeginCommandBuffer()
-		// vkCmd???()
-		// vkEndCommandBuffer()
-		// vkQueueSubmit()
-	
-///////////////////////////////////////////////////////////////////////////////////////
 		
 		// main loop:
 		while ( not glfwWindowShouldClose(p_window) ) {
