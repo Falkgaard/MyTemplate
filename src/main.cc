@@ -30,6 +30,8 @@
 #include <array>
 #include <optional>
 #include <algorithm>
+#include <ranges>
+#include <algorithm>
 
 #include <cstdlib>
 #include <cstdio>
@@ -83,7 +85,7 @@ namespace { // unnamed namespace for file scope
 	// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
 	
 	void
-	enableValidationLayers( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
+	enable_validation_layers( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
 		noexcept( not is_debug_mode )
 	{
 		if constexpr ( is_debug_mode ) { // logic is only required for debug builds
@@ -118,7 +120,7 @@ namespace { // unnamed namespace for file scope
 				instance_create_info.ppEnabledLayerNames = required_validation_layers.data();
 			}
 		}
-	} // end-of-function: enableValidationLayers
+	} // end-of-function: enable_validation_layers
 	
 	std::vector<char const *> required_extensions {
 		#if !defined( NDEBUG )
@@ -128,7 +130,7 @@ namespace { // unnamed namespace for file scope
 	};
 	
 	void
-	enableInstanceExtensions( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
+	enable_instance_extensions( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
 	{
 		spdlog::info( "Enabling instance extensions..." );
 		auto const available_extensions { context.enumerateInstanceExtensionProperties() };
@@ -174,46 +176,84 @@ namespace { // unnamed namespace for file scope
 			}
 			// set create info fields:
 		}
-	} // end-of-function: enableInstanceExtensions
+	} // end-of-function: enable_instance_extensions
 	
-	vk::raii::PhysicalDevice
-	getPhysicalDevice( vk::raii::Instance &instance )
+	[[nodiscard]] u32
+	score_physical_device( vk::raii::PhysicalDevice const &physical_device )
 	{
-		spdlog::info( "Selecting most suitable physical device..." );
-		vk::raii::PhysicalDevices physical_devices( instance );
-		if ( physical_devices.empty() )
-			throw std::runtime_error( "Unable to find any physical devices!" );
-		
-		auto best_match {
-			std::move( physical_devices.front() )
-		};
-		
-		// replace best match with a discrete GPU (if found)
-		if ( best_match.getProperties().deviceType != vk::PhysicalDeviceType::eDiscreteGpu )
-			for ( auto &current_physical_device: physical_devices )
-				if ( current_physical_device.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu ) {
-					best_match = std::move( current_physical_device );
-					break;
-				}
-		
-		if ( best_match.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu )
-			spdlog::info( "Discrete GPU found!" );
-		else 
-			spdlog::info( "Only integrated GPU found!" );
+		auto const properties { physical_device.getProperties() }; // TODO: KHR2?
+		auto const features   { physical_device.getFeatures()   }; // TODO: 2KHR?
+		spdlog::info( "Scoring physical device `{}`...", properties.deviceName.data() );
+		u32 score { 0 };
 		
 		std::string const swapchain_extension_name {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME
 		};
-		for ( auto const &extension: best_match.enumerateDeviceExtensionProperties() )
+		bool has_swapchain_support { false };
+		for ( auto const &extension: physical_device.enumerateDeviceExtensionProperties() )
 			if ( extension.extensionName == swapchain_extension_name )
-				return best_match; // swapchain extension support found
+				has_swapchain_support = true;
+		if ( not has_swapchain_support )
+			spdlog::info( "... swapchain support: false" );
+		else if ( features.geometryShader == VK_FALSE )
+			spdlog::info( "... geometry shader support: false" );
+		else {
+			spdlog::info( "... swapchain support: true" );
+			spdlog::info( "... geometry shader support: true" );
+			score += properties.limits.maxImageDimension2D;
+			if ( properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu ) {
+				spdlog::info( "... type: discrete" );
+				score += 10'000;
+			}
+			else {
+				spdlog::info( "... type: integrated" );
+			}
+			// TODO: add more things if needed
+			spdlog::info( "... final score: {}!", score );
+		}
+		return score;
+	} // end-of-function: score_physical_device
+	
+	vk::raii::PhysicalDevice
+	pick_physical_device( vk::raii::Instance &instance )
+	{
+		spdlog::info( "Selecting most suitable physical device..." );
+		vk::raii::PhysicalDevices physical_devices( instance );
+		spdlog::info( "Found {} physical device(s)...", physical_devices.size() + 1 );
+		if ( physical_devices.empty() )
+			throw std::runtime_error { "Unable to find any physical devices!" };
 		
-		throw std::runtime_error( "Physical device does not support swapchains!" );
-	} // end-of-function: pickPhysicalDevice
+		auto *p_best_match {
+			&physical_devices.front()
+		};
+		
+		auto best_score {
+			score_physical_device( *p_best_match )
+		};
+		
+		for ( auto &current_physical_device: physical_devices | std::views::drop(1) ) {
+			auto const score {
+				score_physical_device( current_physical_device )
+			};
+			if ( score > best_score) {
+				best_score   =  score;
+				p_best_match = &current_physical_device;
+			}
+		}
+		
+		if ( best_score > 0 ) {
+			spdlog::info(
+				"Selected physical device `{}` with final score of: {}",
+				p_best_match->getProperties().deviceName.data(), best_score
+			);
+			return std::move( *p_best_match );
+		}
+		else throw std::runtime_error { "Physical device does not support swapchains!" };
+	} // end-of-function: pick_physical_device
 	
 	#if !defined( NDEBUG )
 		VKAPI_ATTR VkBool32 VKAPI_CALL
-		debugCallback(
+		debug_callback(
 			VkDebugUtilsMessageSeverityFlagBitsEXT      severity_flags,
 			VkDebugUtilsMessageTypeFlagsEXT             type_flags,
 			VkDebugUtilsMessengerCallbackDataEXT const *callback_data_p,
@@ -250,10 +290,10 @@ namespace { // unnamed namespace for file scope
 			}
 			// TODO: expand with more info from callback_data_p
 			return false; // TODO: why?
-		} // end-of-function: debugCallback
+		} // end-of-function: debug_callback
 		
 		[[nodiscard]] auto
-		createDebugMessenger( vk::raii::Context &context, vk::raii::Instance &instance )
+		create_debug_messenger( vk::raii::Context &context, vk::raii::Instance &instance )
 		{
 			spdlog::info( "Creating debug messenger..." );
 			
@@ -286,11 +326,11 @@ namespace { // unnamed namespace for file scope
 			auto const create_info = vk::DebugUtilsMessengerCreateInfoEXT {
 				.messageSeverity =  severity_flags,
 				.messageType     =  type_flags,
-				.pfnUserCallback = &debugCallback
+				.pfnUserCallback = &debug_callback
 			};
 			
 			return vk::raii::DebugUtilsMessengerEXT( instance, create_info );
-		} // end-of-function: createDebugMessenger
+		} // end-of-function: create_debug_messenger
 	#endif
 	
 } // end-of-namespace: <unnamed>
@@ -375,6 +415,7 @@ main()
 	
 	glfwDefaultWindowHints();
 	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
+	glfwWindowHint( GLFW_RESIZABLE,  GLFW_FALSE  ); // TODO: remove later
 	
 	try {
 		// TODO: split engine/app versions and make customization point
@@ -386,8 +427,12 @@ main()
 			)
 		};
 		
-	// Context & instance:
+	// Context:
+		spdlog::info( "Creating Vulkan context..." );
 		vk::raii::Context context {};
+		
+	// Instance:
+		spdlog::info( "Creating instance..." );	
 		
 		vk::ApplicationInfo app_info {
 			.pApplicationName   = "MyTemplate App", // TODO: make customization point 
@@ -400,25 +445,24 @@ main()
 		vk::InstanceCreateInfo instance_create_info {
 			.pApplicationInfo = &app_info
 		};
-		enableValidationLayers(   context, instance_create_info );
-		enableInstanceExtensions( context, instance_create_info );
-		spdlog::info( "Creating instance..." );	
+		enable_validation_layers(   context, instance_create_info );
+		enable_instance_extensions( context, instance_create_info );
 		vk::raii::Instance instance( context, instance_create_info );
 		
 	// Debug messenger:
 		#if !defined( NDEBUG )
-			auto debug_messenger = createDebugMessenger( context, instance ); // TODO: rename
+			auto debug_messenger = create_debug_messenger( context, instance ); // TODO: rename
 		#endif
 		
 	// Physical device:	
 		auto physical_device {
-			getPhysicalDevice( instance )
+			pick_physical_device( instance )
 		};
 		
-	// Window & Surface:
-		spdlog::info( "Creating GLFW window surface... ");
-		VkSurfaceKHR surface_tmp;
+	// Window:
+		spdlog::info( "Creating GLFW window... ");
 		auto *p_window = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr ); // TODO: RAII wrapper
+		VkSurfaceKHR surface_tmp;
 		auto  result   = glfwCreateWindowSurface(
 			*instance,
 			 p_window,
