@@ -219,7 +219,7 @@ namespace { // unnamed namespace for file scope
 	{
 		spdlog::info( "Selecting the most suitable physical device..." );
 		vk::raii::PhysicalDevices physical_devices( instance );
-		spdlog::info( "Found {} physical device(s)...", physical_devices.size() + 1 );
+		spdlog::info( "Found {} physical device(s)...", physical_devices.size() );
 		if ( physical_devices.empty() )
 			throw std::runtime_error { "Unable to find any physical devices!" };
 		
