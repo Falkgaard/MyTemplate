@@ -911,6 +911,8 @@ main()
 	// Uniform buffer:
 		spdlog::info( "Creating uniform data buffer..." );
 		
+		// TODO: allocate one for each swapchain buffer?	
+		
 		auto const projection {
 			glm::perspective( glm::radians(45.f), 1.0f, 0.1f, 100.0f )
 		};
@@ -979,7 +981,7 @@ main()
 				uniform_data_buffer_device_memory.mapMemory( 0, uniform_data_buffer_memory_requirements.size )
 			};
 			std::memcpy( p_mapped_memory, &mvp, sizeof(mvp) );
-			uniform_data_buffer_device_memory.unmapMemory();
+			uniform_data_buffer_device_memory.unmapMemory(); // TODO: remove when uniform buffer is dynamic?
 		}
 		
 	// Descriptor set binding & layout for uniform buffer:
@@ -1055,7 +1057,7 @@ main()
 		
 		for ( u32 i{0}; i<swapchain_framebuffer_count; ++i ) {
 			vk::DescriptorBufferInfo const descriptor_buffer_info {
-				.buffer = uniform_data_buffer[i],
+				.buffer = uniform_data_buffer[i], // TODO!!!!
 				.offset = 0,
 				.range  = sizeof( glm::mat4 )
 			};
