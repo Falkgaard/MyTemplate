@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <ranges>
 #include <algorithm>
+#include <fstream>
 
 #include <cstdlib>
 #include <cstdio>
@@ -60,7 +61,6 @@ using f64 = double;
 # else
 #    error Unsupported compiler! //	inline void unreachable() {}
 # endif
-
 
 bool constexpr g_is_debug_mode {
 	#if !defined( NDEBUG )
@@ -591,7 +591,7 @@ main()
 				};
 				spdlog::info( "Searching for graphics queue family..." );
 				for ( u32 index{0}; index<std::size(queue_family_properties); ++index ) {
-					bool const supports_graphics { queue_family_properties[index].queueFlags bitand vk::QueueFlagBits::eGraphics };
+					bool const supports_graphics { queue_family_properties[index].queueFlags & vk::QueueFlagBits::eGraphics };
 					bool const supports_present  { physical_device.getSurfaceSupportKHR( index, *surface ) == VK_TRUE };
 					if ( supports_graphics and supports_present ) {
 						spdlog::info( "Found queue family that supports both graphics and present!" );
@@ -803,8 +803,8 @@ main()
 				vk::MemoryPropertyFlags            const  memory_property_flags
 			) -> u32 {
 				for ( u32 i{0}; i<physical_device_memory_properties.memoryTypeCount; ++i ) 
-					if ( (type_filter bitand (1<<i)) and
-						  (physical_device_memory_properties.memoryTypes[i].propertyFlags bitand memory_property_flags)
+					if ( (type_filter & (1<<i)) and
+						  (physical_device_memory_properties.memoryTypes[i].propertyFlags & memory_property_flags)
 						      == memory_property_flags )
 					{
 						return i;
@@ -961,7 +961,7 @@ main()
 			find_memory_type_index(
 				physical_device_memory_properties,
 				uniform_data_buffer_memory_requirements.memoryTypeBits,
-				vk::MemoryPropertyFlagBits::eHostVisible bitor vk::MemoryPropertyFlagBits::eHostCoherent
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
 			)
 		};
 		
@@ -1065,7 +1065,46 @@ main()
 
 		// TODO: make recreate_swapchain function
 		// TODO: make update_uniform_buffer function
+	
+	// Load shaders:
+		spdlog::info( "Loading shaders..." );
+		auto const load_binary {
+			// TODO: refactor into free function
+			[]( std::string const &binary_filename )
+			{  // TODO: null_terminated_string_view?
+				spdlog::info( "Attempting to open binary file `{}`...", binary_filename );
+				std::ifstream binary_file {
+					binary_filename,
+					std::ios::binary | std::ios::ate // start at the end of the binary
+				};
+				if ( binary_file ) {
+					spdlog::info( "... successful!" );
+					auto const binary_size {
+						static_cast<std::size_t>( binary_file.tellg() )
+					};
+					spdlog::info( "... binary size: {}", binary_size );	
+					binary_file.seekg( 0 );
+					std::vector<char> binary_buffer( binary_size );
+					binary_file.read( binary_buffer.data(), binary_size );
+					return binary_buffer;
+				}
+				else {
+					spdlog::warn( "... failure!" );
+					throw std::runtime_error { "Failed to load binary file!" };
+				}
+			}
+		};
 		
+		auto const vert_shader {
+			load_binary( "dat/shaders/test.vert.spv" )
+		};
+		
+		auto const frag_shader {
+			load_binary( "dat/shaders/test.frag.spv" )
+		};
+		
+		// Create shader modules + pipeline
+
 ///////////////////////////////////////////////////////////////////////////////////////
 		
 		// main loop:
@@ -1092,7 +1131,6 @@ main()
 		spdlog::critical( "Unknown error encountered!" );
 		std::exit( EXIT_FAILURE );
 	}
-	// exiting:
 	std::exit( EXIT_SUCCESS );
 } // end-of-function: main
 
