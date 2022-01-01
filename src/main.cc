@@ -399,10 +399,12 @@ main()
 	
 	if constexpr ( is_debug_mode ) {
 		spdlog::set_level( spdlog::level::debug );
-		spdlog::info( "Running debug build..." );
+		spdlog::info( "Build: DEBUG" );
 	}
+	else
+		spdlog::info( "Build: RELEASE" );
 	
-	spdlog::info( "Creating window..." );
+	spdlog::info( "Initializing GLFW..." );
 	if ( not glfwInit() ) {
 		spdlog::critical( "Unable to initialize GLFW!" );
 		abort();
