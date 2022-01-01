@@ -737,7 +737,7 @@ main()
 		image_views.reserve( std::size( swapchain_images ) );
 		vk::ImageViewCreateInfo image_view_create_info {
 			.viewType         = vk::ImageViewType::e2D,
-			.format           = format,
+			.format           = surface_format.format, // TODO: verify
 			.subresourceRange = vk::ImageSubresourceRange {
 				.aspectMask       = vk::ImageAspectFlagBits::eColor,
 				.baseMipLevel     = 0u,
@@ -773,10 +773,10 @@ main()
 		
 		vk::ImageCreateInfo const depth_image_create_info {
 			.imageType             = vk::ImageType::e2D,
-			.format                = vk::Format::eD16Unorm,
+			.format                = vk::Format::eD16Unorm, // TODO: query support?
 			.extent                = vk::Extent3D {
-				.width                 = image_extent.width,
-				.height                = image_extent.height,
+				.width                 = surface_extent.width,
+				.height                = surface_extent.height,
 				.depth                 = 1
 			},
 			.mipLevels             = 1,
