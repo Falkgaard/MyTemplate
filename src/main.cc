@@ -1074,9 +1074,8 @@ main()
 		// TODO: make update_uniform_buffer function
 	
 	// Graphics pipeline:
-		
 		auto const create_graphics_pipeline {
-			[]( vk::raii::Device &device )
+			[]( vk::raii::Device &device, vk::Extent2D const &surface_extent )
 			{  // TODO: refactor into free function
 				spdlog::info( "Creating graphics pipeline..." );
 				
@@ -1146,25 +1145,87 @@ main()
 					create_shader_module_from_file( device, "../dat/shaders/test.frag.spv" )
 				};
 				
-			// Creating shader stage:
+			// Creating shader stage(s):
 				
 				spdlog::info( "Creating pipeline shader stages..." );
 				
-				vk::PipelineShaderStageCreateInfo const pipeline_shader_stages[] {
+				vk::PipelineShaderStageCreateInfo const
+				pipeline_shader_stages[]
+				{
 					{
 						.stage  =  vk::ShaderStageFlagBits::eVertex,
 						.module = *vertex_shader_module,
-						.pName  =  "main"
+						.pName  =  "main" // shader program entry point
 					// .pSpecializationInfo is unused (for now);
 					//    but it allows for setting shader constants
 					},
 					{
 						.stage  =  vk::ShaderStageFlagBits::eFragment,
 						.module = *fragment_shader_module,
-						.pName  =  "main"
+						.pName  =  "main" // shader program entry point
 					// .pSpecializationInfo is unused (for now);
 					//     but it allows for setting shader constants
 					}
+				};
+				
+				// WHAT: configures the vertex data format (spacing, instancing, loading...)
+				vk::PipelineVertexInputStateCreateInfo const
+				pipeline_vertex_input_state_create_info
+				{  // NOTE: no data here since it's hardcoded (for now)
+					.vertexBindingDescriptionCount   = 0,
+					.pVertexBindingDescriptions      = nullptr,
+					.vertexAttributeDescriptionCount = 0,
+					.pVertexAttributeDescriptions    = nullptr 
+				};
+				
+				// WHAT: configures the primitive topology of the geometry
+				vk::PipelineInputAssemblyStateCreateInfo const
+				pipeline_input_assembly_state_create_info
+				{
+					.topology               = vk::PrimitiveTopology::eTriangleList,
+					.primitiveRestartEnable = VK_FALSE // unused (for now);
+				}; // otherwise it allows for designating gap indices in strips
+				
+			// Create viewport state:
+				
+				vk::Viewport const viewport {
+					.x        = 0.0f,
+					.y        = 0.0f,
+					.width    = static_cast<f32>( surface_extent.width  ),
+					.height   = static_cast<f32>( surface_extent.height ),
+					.minDepth = 0.0f,
+					.maxDepth = 1.0f
+				};
+				
+				vk::Rect2D const scissor {
+					.offset = { 0, 0 },
+					.extent = surface_extent
+				};
+				
+				vk::PipelineViewportStateCreateInfo const
+				pipeline_viewport_state_create_info
+				{
+					.viewportCount =  1,
+					.pViewports    = &viewport,
+					.scissorCount  =  1,
+					.pScissors     = &scissor,
+				};
+				
+			// Rasterizer:
+				
+				vk::PipelineRasterizationStateCreateInfo const
+				pipeline_rasterization_state_create_info
+				{
+					.depthClampEnable        = VK_FALSE, // mostly just useful for shadow maps; requires GPU feature
+					.rasterizerDiscardEnable = VK_FALSE, // seems pointless
+					.polygonMode             = vk::PolygonMode::eFill, // wireframe and point requires GPU feature
+					.cullMode                = vk::CullModeFlagBits::eBack, // backface culling
+					.frontFace               = vk::FrontFace::eClockwise, // vertex winding order
+					.depthBiasEnable         = VK_FALSE, // mostly just useful for shadow maps
+					.depthBiasConstantFactor = 0.0f,     // mostly just useful for shadow maps
+					.depthBiasClamp          = 0.0f,     // mostly just useful for shadow maps
+					.depthBiasSlopeFactor    = 0.0f,     // mostly just useful for shadow maps
+					.lineWidth               = 1.0f, // >1 requires wideLines GPU feature
 				};
 			} // end-of-lambda-body
 		}; // end-of-lambda: make_graphics_pipeline
