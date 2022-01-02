@@ -1122,6 +1122,7 @@ main()
 			[&load_binary_from_file, &create_shader_module_from_binary]
 			( vk::raii::Device &device, std::string const &shader_binary_filename )
 			{
+				spdlog::info( "Creating shader module from shader binary file..." );
 				return create_shader_module_from_binary(
 					device,
 					load_binary_from_file( shader_binary_filename )
