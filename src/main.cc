@@ -1073,70 +1073,99 @@ main()
 #endif
 		// TODO: make update_uniform_buffer function
 	
-	// Load shaders:
-		spdlog::info( "Loading shaders..." );
-		auto const load_binary_from_file {
-			// TODO: refactor into free function
-			[]( std::string const &binary_filename )
-			{  // TODO: null_terminated_string_view?
-				spdlog::info( "Attempting to open binary file `{}`...", binary_filename );
-				std::ifstream binary_file {
-					binary_filename,
-					std::ios::binary | std::ios::ate // start at the end of the binary
-				};
-				if ( binary_file ) {
-					spdlog::info( "... successful!" );
-					auto const binary_size {
-						static_cast<std::size_t>( binary_file.tellg() )
-					};
-					spdlog::info( "... binary size: {}", binary_size );	
-					binary_file.seekg( 0 );
-					std::vector<char> binary_buffer( binary_size );
-					binary_file.read( binary_buffer.data(), binary_size );
-					return binary_buffer;
-				}
-				else {
-					spdlog::warn( "... failure!" );
-					throw std::runtime_error { "Failed to load binary file!" };
-				}
-			}
-		};
-
-	// Create shader modules:
-		auto const create_shader_module_from_binary {
-			[]( vk::raii::Device &device, std::vector<char> const &shader_binary )
+	// Graphics pipeline:
+		
+		auto const create_graphics_pipeline {
+			[]( vk::raii::Device &device )
 			{  // TODO: refactor into free function
-				spdlog::info( "Creating shader module from shader binary code..." );
-				vk::ShaderModuleCreateInfo const shader_module_create_info {
-					.codeSize = shader_binary.size(),
-					.pCode    = reinterpret_cast<u32 const *>( shader_binary.data() ) /// TODO: UB or US?
+				spdlog::info( "Creating graphics pipeline..." );
+				
+				auto const load_binary_from_file {
+					// TODO: refactor into free function
+					[]( std::string const &binary_filename )
+					{  // TODO: null_terminated_string_view?
+						spdlog::info( "Attempting to open binary file `{}`...", binary_filename );
+						std::ifstream binary_file {
+							binary_filename,
+							std::ios::binary | std::ios::ate // start at the end of the binary
+						};
+						if ( binary_file ) {
+							spdlog::info( "... successful!" );
+							auto const binary_size {
+								static_cast<std::size_t>( binary_file.tellg() )
+							};
+							spdlog::info( "... binary size: {}", binary_size );	
+							binary_file.seekg( 0 );
+							std::vector<char> binary_buffer( binary_size );
+							binary_file.read( binary_buffer.data(), binary_size );
+							return binary_buffer;
+						}
+						else {
+							spdlog::warn( "... failure!" );
+							throw std::runtime_error { "Failed to load binary file!" };
+						}
+					} // end-of-lambda-body
+				}; // end-of-lambda: load_binary_from_file
+
+				auto const create_shader_module_from_binary {
+					[]( vk::raii::Device &device, std::vector<char> const &shader_binary )
+					{  // TODO: refactor into free function
+						spdlog::info( "Creating shader module from shader SPIR-V bytecode..." );
+						vk::ShaderModuleCreateInfo const shader_module_create_info {
+							.codeSize = shader_binary.size(),
+							.pCode    = reinterpret_cast<u32 const *>( shader_binary.data() ) /// TODO: UB or US?
+						};
+						return vk::raii::ShaderModule(
+							device,
+							shader_module_create_info
+						);
+					} // end-of-lambda-body
+				}; // end-of-lambda: create_shader_module_from_file
+				
+				auto const create_shader_module_from_file {
+					[&load_binary_from_file, &create_shader_module_from_binary] (
+						vk::raii::Device  &device,
+						std::string const &shader_spirv_bytecode_filename
+					)
+					{ // TODO: refactor into free function
+						spdlog::info( "Creating shader module from shader SPIR-V bytecode file..." );
+						return create_shader_module_from_binary(
+							device,
+							load_binary_from_file( shader_spirv_bytecode_filename )
+						);
+					} // end-of-lambda-body
+				}; // end-of-lambda: create_shader_module_from_file
+				
+				spdlog::info( "Creating shader modules..." );
+				
+				auto const vertex_shader_module {
+					create_shader_module_from_file( device, "../dat/shaders/test.vert.spv" )
 				};
-				return vk::raii::ShaderModule(
-					device,
-					shader_module_create_info
-				);
-			}
-		};
-		
-		auto const create_shader_module_from_file {
-			[&load_binary_from_file, &create_shader_module_from_binary]
-			( vk::raii::Device &device, std::string const &shader_binary_filename )
-			{
-				spdlog::info( "Creating shader module from shader binary file..." );
-				return create_shader_module_from_binary(
-					device,
-					load_binary_from_file( shader_binary_filename )
-				);
-			}
-		};
-		
-		auto const vert_shader_module {
-			create_shader_module_from_file( device, "dat/shaders/test.vert.spv" )
-		};
-		
-		auto const frag_shader_module {
-			create_shader_module_from_file( device, "dat/shaders/test.frag.spv" )
-		};
+				
+				auto const fragment_shader_module {
+					create_shader_module_from_file( device, "../dat/shaders/test.frag.spv" )
+				};
+				
+			// Creating shader stage:
+				
+				vk::PipelineShaderStageCreateInfo const pipeline_shader_stages[] {
+					{
+						.stage  =  vk::ShaderStageFlagBits::eVertex,
+						.module = *vertex_shader_module,
+						.pName  =  "main"
+					// .pSpecializationInfo is unused (for now);
+					//    but it allows for setting shader constants
+					},
+					{
+						.stage  =  vk::ShaderStageFlagBits::eFragment,
+						.module = *fragment_shader_module,
+						.pName  =  "main"
+					// .pSpecializationInfo is unused (for now);
+					//     but it allows for setting shader constants
+					}
+				};
+			} // end-of-lambda-body
+		}; // end-of-lambda: make_graphics_pipeline
 		
 ///////////////////////////////////////////////////////////////////////////////////////
 		
