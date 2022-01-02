@@ -1148,6 +1148,8 @@ main()
 				
 			// Creating shader stage:
 				
+				spdlog::info( "Creating pipeline shader stages..." );
+				
 				vk::PipelineShaderStageCreateInfo const pipeline_shader_stages[] {
 					{
 						.stage  =  vk::ShaderStageFlagBits::eVertex,
