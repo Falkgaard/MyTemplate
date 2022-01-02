@@ -812,7 +812,7 @@ main()
 				throw std::runtime_error { "Unable to find an index of a suitable memory type!" };
 			}
 		};
-		
+#if 0		
 	// Depth buffer:
 		spdlog::info( "Creating depth buffer image(s)..." );
 		// TODO: Look into more efficient allocation (batch allocation)
@@ -985,7 +985,32 @@ main()
 			spdlog::info( "Unmapping memory..." );
 			uniform_data_buffer_device_memory.unmapMemory(); // TODO: remove when uniform buffer is dynamic?
 		}
+			
+	// Descriptor pool:
+		spdlog::info( "Creating descriptor pool..." );
 		
+		vk::DescriptorPoolSize const descriptor_pool_size {
+			.type            = vk::DescriptorType::eUniformBuffer,
+			.descriptorCount = swapchain_framebuffer_count // one for each frame
+		};
+		
+		vk::DescriptorPoolCreateInfo const descriptor_pool_create_info {
+			.maxSets       =  swapchain_framebuffer_count, // at most one per frame
+			.poolSizeCount =  1, // TODO: comment properly
+			.pPoolSizes    = &descriptor_pool_size
+		// .flag is unused by us
+		};
+		
+		vk::raii::DescriptorPool descriptor_pool( device, descriptor_pool_create_info );
+		
+		auto const generate_swapchain {
+			[] { // TODO!!!
+				create_uniform_buffers();
+				create_descriptor_pool();
+				create_command_buffers();
+			}
+		};
+			
 	// Descriptor set binding & layout for uniform buffer:
 		spdlog::info( "Creating descriptor set layout binding for the uniform data buffer..." );
 		
@@ -994,14 +1019,14 @@ main()
 			.descriptorType     = vk::DescriptorType::eUniformBuffer,
 			.descriptorCount    = 1, // only one descriptor in the set
 			.stageFlags         = vk::ShaderStageFlagBits::eVertex,
-			.pImmutableSamplers = nullptr // NOTE: ignore until later:w
+			.pImmutableSamplers = nullptr // NOTE: ignore until later
 		};
 		
 		spdlog::info( "Creating descriptor set layout for the uniform data buffer..." );
 		
 		vk::DescriptorSetLayoutCreateInfo const uniform_data_buffer_descriptor_set_layout_create_info {
-			.bindingCount    = 1, // only one descriptor set (TODO: verify wording)
-			.pBindings       = &uniform_data_buffer_descriptor_set_layout_binding
+			.bindingCount    =  1, // only one descriptor set (TODO: verify wording)
+			.pBindings       = &uniform_data_buffer_descriptor_set_layout_binding,
 		};
 		
 		vk::raii::DescriptorSetLayout uniform_data_buffer_descriptor_set_layout(
@@ -1013,10 +1038,10 @@ main()
 		spdlog::info( "Creating pipeline layout..." );
 		
 		vk::PipelineLayoutCreateInfo const pipeline_layout_create_info {
-			.setLayoutCount         = 1,
+			.setLayoutCount         =   1,
 			.pSetLayouts            = &*uniform_data_buffer_descriptor_set_layout, // TODO: verify &*
-			.pushConstantRangeCount = 0,      // TODO: explain purpose
-			.pPushConstantRanges    = nullptr //       ditto
+			.pushConstantRangeCount =   0,             // TODO: explain purpose
+			.pPushConstantRanges    =   VK_NULL_HANDLE //       ditto
 		};
 		
 		vk::raii::PipelineLayout pipeline_layout( device, pipeline_layout_create_info ); 
@@ -1024,26 +1049,7 @@ main()
 		// NOTE (shader usage): layout (std140, binding = 0) uniform bufferVals {
 		// NOTE (shader usage):     mat4 mvp;
 		// NOTE (shader usage): } myBufferVals;
-		
-	// Descriptor pool:
-		spdlog::info( "Creating descriptor pool..." );
-		
-		// TODO: std::array?
-		vk::DescriptorPoolSize const descriptor_pool_sizes[1] {
-			{
-				.type            = vk::DescriptorType::eUniformBuffer,
-				.descriptorCount = 1
-			}
-		};
-		
-		vk::DescriptorPoolCreateInfo const descriptor_pool_create_info {
-			.maxSets       = 1, // TODO: comment properly
-			.poolSizeCount = 1, // TODO: comment properly
-			.pPoolSizes    = descriptor_pool_sizes
-		};
-		
-		vk::raii::DescriptorPool descriptor_pool( device, descriptor_pool_create_info );
-		
+
 	// Descriptor set(s):
 		spdlog::info( "Allocating descriptor set(s)..." );	
 		
@@ -1064,13 +1070,12 @@ main()
 				.range  =  sizeof( glm::mat4 )
 			};
 		}
-
-		// TODO: make recreate_swapchain function
+#endif
 		// TODO: make update_uniform_buffer function
 	
 	// Load shaders:
 		spdlog::info( "Loading shaders..." );
-		auto const load_binary {
+		auto const load_binary_from_file {
 			// TODO: refactor into free function
 			[]( std::string const &binary_filename )
 			{  // TODO: null_terminated_string_view?
@@ -1096,17 +1101,42 @@ main()
 				}
 			}
 		};
-		
-		auto const vert_shader {
-			load_binary( "dat/shaders/test.vert.spv" )
-		};
-		
-		auto const frag_shader {
-			load_binary( "dat/shaders/test.frag.spv" )
-		};
-		
-		// Create shader modules + pipeline
 
+	// Create shader modules:
+		auto const create_shader_module_from_binary {
+			[]( vk::raii::Device &device, std::vector<char> const &shader_binary )
+			{  // TODO: refactor into free function
+				spdlog::info( "Creating shader module from shader binary code..." );
+				vk::ShaderModuleCreateInfo const shader_module_create_info {
+					.codeSize = shader_binary.size(),
+					.pCode    = reinterpret_cast<u32 const *>( shader_binary.data() ) /// TODO: UB or US?
+				};
+				return vk::raii::ShaderModule(
+					device,
+					shader_module_create_info
+				);
+			}
+		};
+		
+		auto const create_shader_module_from_file {
+			[&load_binary_from_file, &create_shader_module_from_binary]
+			( vk::raii::Device &device, std::string const &shader_binary_filename )
+			{
+				return create_shader_module_from_binary(
+					device,
+					load_binary_from_file( shader_binary_filename )
+				);
+			}
+		};
+		
+		auto const vert_shader_module {
+			create_shader_module_from_file( device, "dat/shaders/test.vert.spv" )
+		};
+		
+		auto const frag_shader_module {
+			create_shader_module_from_file( device, "dat/shaders/test.frag.spv" )
+		};
+		
 ///////////////////////////////////////////////////////////////////////////////////////
 		
 		// main loop:
