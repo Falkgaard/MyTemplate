@@ -976,11 +976,13 @@ main()
 		);
 		
 		{ // TODO: verify block
-			spdlog::info( "Mapping the uniform data buffer's device memory to the host device's memory so that the MVP can be uploaded..." );
+			spdlog::info( "Mapping the uniform data buffer's device memory to the host device's memory..." );
 			auto *p_mapped_memory {
 				uniform_data_buffer_device_memory.mapMemory( 0, uniform_data_buffer_memory_requirements.size )
 			};
+			spdlog::info( "Uploading the MVP matrix to the mapped uniform data buffer memory..." );
 			std::memcpy( p_mapped_memory, &mvp, sizeof(mvp) );
+			spdlog::info( "Unmapping memory..." );
 			uniform_data_buffer_device_memory.unmapMemory(); // TODO: remove when uniform buffer is dynamic?
 		}
 		
