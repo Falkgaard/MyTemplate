@@ -14,8 +14,8 @@ public:
 	struct Dimensions final { int width, height; };
 	Window( GlfwInstance &, vk::raii::Instance &instance );
 	Window(                 ) = delete;	
-	Window( Window const &  ) = delete;
-	Window( Window       && ) noexcept;
+	Window( Window const  &other ) = delete;
+	Window( Window       &&other ) noexcept;
 	~Window() noexcept;
 	// TODO: assignment operators?
 	[[nodiscard]] Dimensions                   get_dimensions() const;
