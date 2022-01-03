@@ -4,6 +4,8 @@
 
 #include <span>
 
+// TODO: make into a singleton?
+
 class GlfwInstance final
 {
 public:
