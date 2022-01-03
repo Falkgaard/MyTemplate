@@ -3,25 +3,24 @@
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
-#include <fRNG/core.hh>
+// #include <fRNG/core.hh>
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
 
 #include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_raii.hpp>
 
-#include <glm/common.hpp>
-#include <glm/exponential.hpp>
-#include <glm/geometric.hpp>
-#include <glm/matrix.hpp>
-#include <glm/trigonometric.hpp>
-#include <glm/ext/vector_float3.hpp>
-#include <glm/ext/matrix_float4x4.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/scalar_constants.hpp>
+// #include <glm/common.hpp>
+// #include <glm/exponential.hpp>
+// #include <glm/geometric.hpp>
+// #include <glm/matrix.hpp>
+// #include <glm/trigonometric.hpp>
+// #include <glm/ext/vector_float3.hpp>
+// #include <glm/ext/matrix_float4x4.hpp>
+// #include <glm/ext/matrix_transform.hpp>
+// #include <glm/ext/matrix_clip_space.hpp>
+// #include <glm/ext/scalar_constants.hpp>
 
 #include <fstream>
 #include <cstdlib>
