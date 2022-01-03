@@ -2,7 +2,7 @@
 
 A WIP template for graphical projects.
 
-# Current dependencies
+## Current dependencies
 
 * CMake
 
