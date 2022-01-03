@@ -1,9 +1,20 @@
 #include "MyTemplate/Renderer/Pipeline.hpp"
+#include "MyTemplate/Renderer/Swapchain.hpp"
+#include "MyTemplate/Common/aliases.hpp"
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_raii.hpp>
+#include <spdlog/spdlog.h>
+#include <fstream>
+#include <array>
+#include <vector>
+#include <string>
 
-#if 0 // TODO:
+Pipeline::Pipeline( vk::raii::Device &logical_device, Swapchain &swapchain )
+{
+	// TODO: refactor stuff into free file-scope functions
 	// Graphics pipeline:
 		auto const create_graphics_pipeline {
-			[]( vk::raii::Device &device, vk::Extent2D const &surface_extent )
+			[]( vk::raii::Device &logical_device, vk::Extent2D const &surface_extent )
 			{  // TODO: refactor into free function
 				spdlog::info( "Creating graphics pipeline..." );
 				
@@ -21,7 +32,7 @@
 							auto const binary_size {
 								static_cast<std::size_t>( binary_file.tellg() )
 							};
-							spdlog::info( "... binary size: {}", binary_size );	
+							spdlog::info( "... binary size: {}", binary_size );
 							binary_file.seekg( 0 );
 							std::vector<char> binary_buffer( binary_size );
 							binary_file.read( binary_buffer.data(), binary_size );
@@ -33,9 +44,9 @@
 						}
 					} // end-of-lambda-body
 				}; // end-of-lambda: load_binary_from_file
-
+				
 				auto const create_shader_module_from_binary {
-					[]( vk::raii::Device &device, std::vector<char> const &shader_binary )
+					[]( vk::raii::Device &logical_device, std::vector<char> const &shader_binary )
 					{  // TODO: refactor into free function
 						spdlog::info( "Creating shader module from shader SPIR-V bytecode..." );
 						vk::ShaderModuleCreateInfo const shader_module_create_info {
@@ -43,7 +54,7 @@
 							.pCode    = reinterpret_cast<u32 const *>( shader_binary.data() ) /// TODO: UB or US?
 						};
 						return vk::raii::ShaderModule(
-							device,
+							logical_device,
 							shader_module_create_info
 						);
 					} // end-of-lambda-body
@@ -51,13 +62,13 @@
 				
 				auto const create_shader_module_from_file {
 					[&load_binary_from_file, &create_shader_module_from_binary] (
-						vk::raii::Device  &device,
+						vk::raii::Device  &logical_device,
 						std::string const &shader_spirv_bytecode_filename
 					)
 					{ // TODO: refactor into free function
 						spdlog::info( "Creating shader module from shader SPIR-V bytecode file..." );
 						return create_shader_module_from_binary(
-							device,
+							logical_device,
 							load_binary_from_file( shader_spirv_bytecode_filename )
 						);
 					} // end-of-lambda-body
@@ -66,11 +77,11 @@
 				spdlog::info( "Creating shader modules..." );
 				
 				auto const vertex_shader_module {
-					create_shader_module_from_file( device, "../dat/shaders/test.vert.spv" )
+					create_shader_module_from_file( logical_device, "../dat/shaders/test.vert.spv" )
 				};
 				
 				auto const fragment_shader_module {
-					create_shader_module_from_file( device, "../dat/shaders/test.frag.spv" )
+					create_shader_module_from_file( logical_device, "../dat/shaders/test.frag.spv" )
 				};
 				
 			// Creating shader stage(s):
@@ -103,7 +114,7 @@
 					.vertexBindingDescriptionCount   = 0,
 					.pVertexBindingDescriptions      = nullptr,
 					.vertexAttributeDescriptionCount = 0,
-					.pVertexAttributeDescriptions    = nullptr 
+					.pVertexAttributeDescriptions    = nullptr
 				};
 				
 				// WHAT: configures the primitive topology of the geometry
@@ -195,7 +206,48 @@
 					                     | vk::ColorComponentFlagBits::eA,
 				};
 				
+				vk::PipelineColorBlendStateCreateInfo const
+				color_blend_state_create_info
+				{
+					.logicOpEnable     =  VK_FALSE,
+					.logicOp           =  vk::LogicOp::eCopy,
+					.attachmentCount   =  1,
+					.pAttachments      = &pipeline_color_blend_attachment_state,
+					.blendConstants    =  std::array<f32,4>{ 0.0f, 0.0f, 0.0f, 0.0f }
+				};
+				
+				// NOTE: blendEnable and logicOpEnable are mutually exclusive!
+				
+			// Dynamic state:
+				
+				// e.g: std::array<vk::DynamicState> const dynamic_states {
+				//         vk::DynamicState::eLineWidth	
+				//      };
+				
+				vk::PipelineDynamicStateCreateInfo const
+				dynamic_state_create_info
+				{
+					.dynamicStateCount = 0,
+					.pDynamicStates    = nullptr
+				};
+				
+			// Pipeline layout:
+				
+				// TODO: revisit later
+				vk::PipelineLayoutCreateInfo const pipeline_layout_create_info {
+					.setLayoutCount         = 0,       // TODO: explain
+					.pSetLayouts            = nullptr, // TODO: explain
+					.pushConstantRangeCount = 0,       // TODO: explain
+					.pPushConstantRanges    = nullptr  // TODO: explain
+				};
+				
+				vk::raii::PipelineLayout pipeline_layout(
+					logical_device,
+					pipeline_layout_create_info	
+				);
+				
 			} // end-of-lambda-body
 		}; // end-of-lambda: make_graphics_pipeline
-#endif
+} // end-of-function: Pipeline::Pipeline
+
 // EOF
