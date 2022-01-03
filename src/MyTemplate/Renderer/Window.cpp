@@ -4,6 +4,7 @@
 #include <utility>
 #include <stdexcept>
 
+// NOTE: the GlfwInstance reference is just to ensure that GLFW is initialized
 Window::Window( [[maybe_unused]] GlfwInstance &, vk::raii::Instance &instance )
 {
 	spdlog::info( "Constructing a Window instance..." );
@@ -13,6 +14,7 @@ Window::Window( [[maybe_unused]] GlfwInstance &, vk::raii::Instance &instance )
 	glfwWindowHint( GLFW_RESIZABLE,  GLFW_FALSE  ); // TODO: remove later
 	
 	spdlog::info( "... creating GLFW window");
+	// TODO: refactor out construction args
 	m_p_window = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr );
 	VkSurfaceKHR surface_tmp;
 	
