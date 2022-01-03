@@ -234,7 +234,8 @@ Pipeline::Pipeline( vk::raii::Device &logical_device, Swapchain &swapchain )
 			// Pipeline layout:
 				
 				// TODO: revisit later
-				vk::PipelineLayoutCreateInfo const pipeline_layout_create_info {
+				vk::PipelineLayoutCreateInfo const
+				pipeline_layout_create_info {
 					.setLayoutCount         = 0,       // TODO: explain
 					.pSetLayouts            = nullptr, // TODO: explain
 					.pushConstantRangeCount = 0,       // TODO: explain
@@ -244,6 +245,44 @@ Pipeline::Pipeline( vk::raii::Device &logical_device, Swapchain &swapchain )
 				vk::raii::PipelineLayout pipeline_layout(
 					logical_device,
 					pipeline_layout_create_info	
+				);
+				
+				vk::AttachmentDescription const
+				color_attachment_description {
+					.format         = swapchain_image_format,
+					.samples        = vk::SampleCountFlagBits::e1, // no MSAA yet
+					.loadOp         = vk::AttachmentLoadOp::eLoad,
+					.storeOp        = vk::AttachmentStoreOp::eStore,
+					.stencilLoadOp  = vk::AttachmentLoadOp::eDontCare,  // no depth/stencil yet
+					.stencilStoreOp = vk::AttachmentStoreOp::eDontCare, // no depth/stencil yet
+					.initialLayout  = vk::ImageLayout::eUndefined,
+					.finalLayout    = vk::ImageLayout::ePresentSrcKHR
+				};
+				
+				vk::AttachmentReference const
+				color_attachment_reference {
+					.attachment = 0, // index 0; we only have one attachment at the moment
+					.layout     = vk::ImageLayout::eColorAttachmentOptimal
+				};
+				
+				vk::SubpassDescription const
+				color_subpass_description {
+					.pipelineBindPoint    =  vk::PipelineBindPoint::eGraphics,
+					.colorAttachmentCount =  1,
+					.pColorAttachments    = &color_attachment_reference
+				};
+				
+				vk::RenderPassCreateInfo const
+				color_render_pass_create_info {
+					.attachmentCount =  1,
+					.pAttachments    = &color_attachment_description,
+					.subpassCount    =  1,
+					.pSubpasses      = &color_subpass_description
+				};
+				
+				vk::raii::RenderPass color_render_pass(
+					logical_device,
+					color_render_pass_create_info
 				);
 				
 			} // end-of-lambda-body

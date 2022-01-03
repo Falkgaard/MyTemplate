@@ -13,7 +13,7 @@ class Pipeline {
 		Pipeline( vk::raii::Device &logical_device, Swapchain &swapchain );
 		~Pipeline() noexcept;
 	private:
-};
+}; // end-of-class: Pipeline
 
-#endif // end-of-header-guard PIPELINE_HPP_K7YBFDM9
+#endif // end-of-header-guard: PIPELINE_HPP_K7YBFDM9
 // EOF
