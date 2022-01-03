@@ -25,3 +25,5 @@ A WIP template for graphical projects.
 * fHash
 
 * fRNG
+
+* GLM

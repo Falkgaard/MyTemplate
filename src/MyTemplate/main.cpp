@@ -355,14 +355,4 @@ main()
 	std::exit( EXIT_SUCCESS );
 } // end-of-function: main
 
-/*
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest/doctest.h"
-TEST_CASE ("Test function") {
-	CHECK( f(6)    ==   69 );
-	CHECK( f(9)    ==   69 );
-	CHECK( f(123)  ==  169 );
-	CHECK( f(420)  ==  469 );
-	CHECK( f(3234) == 3269 );
-}
-*/
+// EOF
