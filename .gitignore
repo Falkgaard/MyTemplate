@@ -12,11 +12,13 @@ debug/
 # Generated compiler commands
 compile_commands.json
 
-# Clangd
-.clangd
-
 # Misc
 package-lock.json
+.clangd
+.gdb_history
+.vimspector.json
+.vimspector.session
+tags
 
 # Prerequisites
 *.d
@@ -50,7 +52,3 @@ package-lock.json
 *.exe
 *.out
 *.app
-
-# Misc
-.gdb_history
-tags
