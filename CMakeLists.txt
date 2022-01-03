@@ -91,7 +91,7 @@ PRIVATE # dependency headers here:
 	<vulkan/vulkan.hpp>
 	<vulkan/vulkan_raii.hpp>
 	
-	<fRNG/core.hh>
+	# <fRNG/core.hh> (disabled for now; TODO: fix refinition issue)
 	                                
 	[["imgui/imgui.h"]]
 	[["imgui/imgui_impl_glfw.h"]]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # run from project root!
-printf '\n \033[0;1;37mCompiling shaders from GLSL to SPIR-V...\n'
+printf '\n\033[0;1;37mCompiling shaders from GLSL to SPIR-V...\n'
 shopt -s nullglob
 shopt -s nocaseglob
 for input_shader in ./dat/shaders/*.{vert,geom,frag}; do

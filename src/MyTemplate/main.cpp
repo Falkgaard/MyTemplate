@@ -1,46 +1,44 @@
 #include "MyTemplate/info.hpp"
 
-#if 0 // pre-compiled headers:
-	#include <fmt/core.h>
-	#include <spdlog/spdlog.h>
-	
-	#include <fRNG/core.hh>
-	
-	#include "imgui/imgui.h"
-	#include "imgui/imgui_impl_glfw.h"
-	#include "imgui/imgui_impl_vulkan.h"
-	#include <GLFW/glfw3.h>
-	#include <vulkan/vulkan.hpp>
-	#include <vulkan/vulkan_raii.hpp>
-	
-	#include <glm/common.hpp>
-	#include <glm/exponential.hpp>
-	#include <glm/geometric.hpp>
-	#include <glm/matrix.hpp>
-	#include <glm/trigonometric.hpp>
-	#include <glm/ext/vector_float3.hpp>
-	#include <glm/ext/matrix_float4x4.hpp>
-	#include <glm/ext/matrix_transform.hpp>
-	#include <glm/ext/matrix_clip_space.hpp>
-	#include <glm/ext/scalar_constants.hpp>
-	
-	#include <iostream>
-	#include <array>
-	#include <vector>
-	#include <optional>
-	#include <ranges>
-	#include <string>
-	#include <string_view>
-	#include <algorithm>
-	#include <fstream>
-	
-	#include <cstdlib>
-	#include <cstdio>
-	#include <cstring>
-	#include <cstdint>
-	#include <cinttypes>
-	#include <cmath>
-#endif
+#include <fmt/core.h>
+#include <spdlog/spdlog.h>
+
+#include <fRNG/core.hh>
+
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_vulkan.h"
+#include <GLFW/glfw3.h>
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_raii.hpp>
+
+#include <glm/common.hpp>
+#include <glm/exponential.hpp>
+#include <glm/geometric.hpp>
+#include <glm/matrix.hpp>
+#include <glm/trigonometric.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/scalar_constants.hpp>
+
+#include <iostream>
+#include <array>
+#include <vector>
+#include <optional>
+#include <ranges>
+#include <string>
+#include <string_view>
+#include <algorithm>
+#include <fstream>
+
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <cstdint>
+#include <cinttypes>
+#include <cmath>
 
 #include "MyTemplate/Common/aliases.hpp"
 #include "MyTemplate/Renderer/Texture.hpp"
