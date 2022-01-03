@@ -9,6 +9,9 @@
 #include <vulkan/vulkan_raii.hpp>
 #include <ranges>
 #include <algorithm>
+#include <optional>
+#include <array>
+#include <vector>
 
 namespace // private (file-scope)
 {
@@ -29,9 +32,9 @@ namespace // private (file-scope)
 			auto const available_validation_layers { vk_context.enumerateInstanceLayerProperties() };
 			// print required and available layers:
 			for ( auto const &e : required_validation_layers )
-				spdlog::info( "Required validation layer: `{}`", e );
+				spdlog::info( "... required validation layer: `{}`", e );
 			for ( auto const &e : available_validation_layers )
-				spdlog::info( "Available validation layer: `{}`", e.layerName );
+				spdlog::info( "... available validation layer: `{}`", e.layerName );
 			bool is_missing_layer { false };
 			// ensure required layers are available:
 			for ( auto const &target : required_validation_layers ) {
@@ -44,7 +47,7 @@ namespace // private (file-scope)
 				}
 				if ( not match_found ) {
 					is_missing_layer = true;
-					spdlog::error( "Missing validation layer: `{}`!", target );
+					spdlog::error( "... missing validation layer: `{}`!", target );
 				}
 			}
 			
@@ -191,7 +194,7 @@ namespace // private (file-scope)
 	{
 		spdlog::info( "Selecting the most suitable physical device..." );
 		vk::raii::PhysicalDevices physical_devices( vk_instance );
-		spdlog::info( "Found {} physical device(s)...", physical_devices.size() );
+		spdlog::info( "... found {} physical device(s)...", physical_devices.size() );
 		if ( physical_devices.empty() )
 			throw std::runtime_error { "Unable to find any physical devices!" };
 		
@@ -215,7 +218,7 @@ namespace // private (file-scope)
 		
 		if ( best_score > 0 ) {
 			spdlog::info(
-				"Selected physical device `{}` with a final score of: {}",
+				"... selected physical device `{}` with a final score of: {}",
 				p_best_match->getProperties().deviceName.data(), best_score
 			);
 			return std::make_unique<vk::raii::PhysicalDevice>( std::move( *p_best_match ) );
@@ -268,21 +271,21 @@ namespace // private (file-scope)
 	[[nodiscard]] auto
 	make_vk_context()
 	{
-		spdlog::info( "Making Vulkan context..." );
+		spdlog::info( "Creating Vulkan context..." );
 		return std::make_unique<vk::raii::Context>();
 	} // end-of-function: make_vk_context
 	
 	[[nodiscard]] auto
 	make_glfw_instance()
 	{
-		spdlog::info( "Making GLFW instance..." );
+		spdlog::info( "Creating GLFW instance..." );
 		return std::make_unique<GlfwInstance>();
 	} // end-of-function: make_glfw_instance
 	
 	[[nodiscard]] auto
 	make_vk_instance( GlfwInstance &glfw_instance, vk::raii::Context &vk_context )
 	{
-		spdlog::info( "Making Vulkan instance..." );
+		spdlog::info( "Creating Vulkan instance..." );
 		
 		// TODO: split engine/app versions and make customization point
 		// TODO: move into some ApplicationInfo class created in main?
@@ -314,7 +317,7 @@ namespace // private (file-scope)
 		[[nodiscard]] auto
 		make_debug_messenger( vk::raii::Context &vk_context, vk::raii::Instance &vk_instance )
 		{
-			spdlog::info( "Making debug messenger..." );
+			spdlog::info( "Creating debug messenger..." );
 			
 			auto const extension_properties {
 				vk_context.enumerateInstanceExtensionProperties()
@@ -357,7 +360,7 @@ namespace // private (file-scope)
 	[[nodiscard]] auto
 	make_window( GlfwInstance &glfw_instance, vk::raii::Instance &vk_instance )
 	{
-		spdlog::info( "Making window..." );
+		spdlog::info( "Creating window..." );
 		return std::make_unique<Window>( glfw_instance, vk_instance );
 	} // end-of-function: make_window
 	
@@ -379,17 +382,17 @@ namespace // private (file-scope)
 			};
 			
 			if ( supports_graphics and supports_present ) {
-				spdlog::info( "Found queue family that supports both graphics and present!" );
+				spdlog::info( "... found queue family that supports both graphics and present!" );
 				maybe_present_index  = index;
 				maybe_graphics_index = index;
 				break;
 			}
 			else if ( supports_graphics ) {
-				spdlog::info( "Found queue family that supports graphics!" );
+				spdlog::info( "... found queue family that supports graphics!" );
 				maybe_graphics_index = index;
 			}
 			else if ( supports_present ) {
-				spdlog::info( "Found queue family that supports present!" );
+				spdlog::info( "... found queue family that supports present!" );
 				maybe_present_index = index;
 			}
 		}
@@ -398,7 +401,7 @@ namespace // private (file-scope)
 				maybe_present_index.value() != maybe_graphics_index.value()
 			};
 			if ( are_separate )
-				spdlog::info( "Selected different queue families for graphics and present." );
+				spdlog::info( "... selected different queue families for graphics and present." );
 			return QueueFamilyIndices {
 				.present      = maybe_present_index.value(),
 				.graphics     = maybe_graphics_index.value(),
@@ -414,7 +417,7 @@ namespace // private (file-scope)
 		QueueFamilyIndices const &queue_family_indices
 	)
 	{
-		spdlog::info( "Making logical device..." );
+		spdlog::info( "Creating logical device..." );
 		
 		// TODO: refactor approach when more queues are needed
 		std::vector<vk::DeviceQueueCreateInfo> queue_create_infos {};
@@ -455,7 +458,7 @@ namespace // private (file-scope)
 	[[nodiscard]] auto
 	make_queue( vk::raii::Device &logical_device, u32 const queue_family_index, u32 const queue_index )
 	{ // TODO: refactor away third arg and use automated tracking + exceptions
-		spdlog::info( "Making handle for queue #{} of queue family #{}...", queue_index, queue_family_index );
+		spdlog::info( "Creating handle for queue #{} of queue family #{}...", queue_index, queue_family_index );
 		auto queue {
 			logical_device.getQueue( queue_family_index, queue_index )
 		};
@@ -465,7 +468,7 @@ namespace // private (file-scope)
 	[[nodiscard]] auto
 	make_command_pool( vk::raii::Device &logical_device, u32 const graphics_queue_family_index )
 	{
-		spdlog::info( "Making command buffer pool..." );
+		spdlog::info( "Creating command buffer pool..." );
 		vk::CommandPoolCreateInfo const create_info {
 			// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
 			//       Also, one pool would be needed for each queue family (if ever extended).
@@ -482,7 +485,7 @@ namespace // private (file-scope)
 		u32 const               command_buffer_count
 	)
 	{
-		spdlog::info( "Making {} command buffer(s)...", command_buffer_count );
+		spdlog::info( "Creating {} command buffer(s)...", command_buffer_count );
 			vk::CommandBufferAllocateInfo const allocate_info {
 			.commandPool        = *command_pool,
 			.level              =  level,
@@ -499,7 +502,7 @@ namespace // private (file-scope)
 		QueueFamilyIndices       &queue_family_indices
 	)
 	{
-		spdlog::info( "Making swapchain..." );
+		spdlog::info( "Creating swapchain..." );
 		return std::make_unique<Swapchain>( physical_device, logical_device, window, queue_family_indices );
 	} // end-of-function: make_swapchain
 	

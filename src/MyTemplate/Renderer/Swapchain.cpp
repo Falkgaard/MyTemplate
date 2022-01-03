@@ -16,9 +16,15 @@ namespace { // private (file-scope)
 			physical_device.getSurfaceFormatsKHR( *window.get_surface() ) // TODO: 2KHR?
 		};
 		for ( auto const &available_surface_format: available_surface_formats )
-			if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb           // TODO: refactor out
-			and  available_surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) //       ^ ditto
+			if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb             // TODO: refactor out
+			and  available_surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) { //       ^ ditto
+				spdlog::info(
+					"... selected surface format `{}` in color space `{}`",
+					to_string( available_surface_format.format     ),
+					to_string( available_surface_format.colorSpace )
+				);
 				return available_surface_format;
+		}
 		// TODO: add contingency decisions to fallback on
 		throw std::runtime_error { "Unable to find the desired surface format!" };	
 	} // end-of-function: select_surface_format
@@ -45,6 +51,7 @@ namespace { // private (file-scope)
 					surface_capabilities.maxImageExtent.height
 				);
 		}
+		spdlog::info( "... selected swapchain extent: {}x{}", result.width, result.height );
 		return result;
 	} // end-of-function: select_surface_extent
 	
@@ -56,6 +63,7 @@ namespace { // private (file-scope)
 	) noexcept
 	{
 		// TODO: add support for ordered priorities instead of just ideal/fallback.
+		spdlog::info( "Selecting swapchain present mode..." );
 		auto const fallback_present_mode {
 			vk::PresentModeKHR::eFifo
 		};
@@ -77,11 +85,17 @@ namespace { // private (file-scope)
 			!= std::end( available_present_modes )
 		};
 		if ( has_support_for_ideal_mode ) {
-			spdlog::info( "Ideal present mode is supported by device!" );
+			spdlog::info(
+				"... ideal present mode `{}` is supported by device!",
+				to_string( ideal_present_mode )
+			);
 			return ideal_present_mode;
 		}
 		else {
-			spdlog::warn( "Ideal present mode is not supported by device; using fallback present mode!" );
+			spdlog::warn(
+				"... ideal present mode is not supported by device; using fallback present mode `{}`!",
+				to_string( fallback_present_mode )
+			);
 			return fallback_present_mode;
 		}
 	} // end-of-function: select_present_mode
@@ -93,10 +107,11 @@ namespace { // private (file-scope)
 	) noexcept
 	{
 		// TODO: maybe add 1 to the ideal framebuffer count..?
+		spdlog::info( "Selecting swapchain framebuffer count..." );
 		auto const ideal_framebuffer_count {
 			static_cast<u32>( framebuffering_priority )
 		};
-		spdlog::info( "Ideal framebuffer count: {}", ideal_framebuffer_count );
+		spdlog::info( "... ideal framebuffer count: {}", ideal_framebuffer_count );
 		auto const minimum_framebuffer_count {
 			surface_capabilities.minImageCount
 		};
@@ -111,7 +126,7 @@ namespace { // private (file-scope)
 				maximum_framebuffer_count
 			)
 		};
-		spdlog::info( "Nearest available framebuffer count: {}", result );
+		spdlog::info( "... nearest available framebuffer count: {}", result );
 		return result;
 	} // end-of-function: select_framebuffer_count
 	
