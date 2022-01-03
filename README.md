@@ -8,8 +8,6 @@ A WIP template for graphical projects.
 
 * Vulkan
 
-* Vulkan-Headers
-
 * Vulkan-Hpp
 
 * GLFW3
