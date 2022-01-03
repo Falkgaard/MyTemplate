@@ -26,6 +26,8 @@ set          ( CMAKE_POLICY_DEFAULT_CMP0069       NEW )
 add_executable (
 	${PROJECT_NAME}
 	"src/${PROJECT_NAME}/main.cpp"
+	"src/${PROJECT_NAME}/Renderer/GlfwInstance.cpp"
+	"src/${PROJECT_NAME}/Renderer/Window.cpp"
 )
 
 target_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS )
@@ -106,6 +108,8 @@ PRIVATE # dependency headers here:
 	<optional>
 	<algorithm>
 	<ranges>
+	<utility>
+	<memory>
 	# TODO: add more here when used
 	                                
 	<cstdlib>

@@ -8,7 +8,7 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
-#include <GLFW/glfw3.h>
+
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -36,59 +36,15 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
-#include <cstdint>
 #include <cinttypes>
 #include <cmath>
 
+#include "MyTemplate/Common/utility.hpp"
 #include "MyTemplate/Common/aliases.hpp"
+
+#include "MyTemplate/Renderer/GlfwInstance.hpp"
+#include "MyTemplate/Renderer/Window.hpp"
 #include "MyTemplate/Renderer/Texture.hpp"
-
-using u8  = std::uint8_t;
-using u16 = std::uint16_t;
-using u32 = std::uint32_t;
-using u64 = std::uint64_t;
-
-using i8  = std::int8_t;
-using i16 = std::int16_t;
-using i32 = std::int32_t;
-using i64 = std::int64_t;
-
-using f32 = float;
-using f64 = double;
-
-// TODO: replace with `std::unreachable()` when it becomes available.
-# ifdef __GNUC__ // GCC 4.8+, Clang, Intel and other compilers compatible with GCC (-std=c++0x or above)
-	[[noreturn]] inline __attribute__((always_inline)) void unreachable() { __builtin_unreachable(); }
-# elif defined(_MSC_VER) // MSVC
-	[[noreturn]] __forceinline void unreachable() { __assume(false); }
-# else
-#    error Unsupported compiler! //	inline void unreachable() {}
-# endif
-
-bool constexpr g_is_debug_mode {
-	#if !defined( NDEBUG )
-		true
-	#else
-		false
-	#endif
-};
-
-/*
-int f( int n ) {
-	rng::engine e;
-	auto const rng_val = rng::get( 0, 100, e );
-	spdlog::info("Running f() ...");
-	auto result = (n / 100 * 100) + 69;
-	fmt::print( "(fmt): App v{}.{}, testing f({}) ... result: {} ... random value: {}\n",
-		MYTEMPLATE_VERSION_MAJOR,
-		MYTEMPLATE_VERSION_MINOR,
-		n,
-		result,
-		rng_val
-	);
-	return result;
-}
-*/
 
 namespace { // unnamed namespace for file scope
 	std::array const required_validation_layers {
@@ -98,12 +54,12 @@ namespace { // unnamed namespace for file scope
 	// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
 	
 	void
-	enable_validation_layers( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
+	enable_validation_layers( vk::raii::Context &vk_context, vk::InstanceCreateInfo &vk_instance_create_info )
 		noexcept( not g_is_debug_mode )
 	{
 		if constexpr ( g_is_debug_mode ) { // logic is only required for debug builds
 			spdlog::info( "Enabling validation layers..." );
-			auto const available_validation_layers { context.enumerateInstanceLayerProperties() };
+			auto const available_validation_layers { vk_context.enumerateInstanceLayerProperties() };
 			// print required and available layers:
 			for ( auto const &e : required_validation_layers )
 				spdlog::info( "Required validation layer: `{}`", e );
@@ -129,8 +85,8 @@ namespace { // unnamed namespace for file scope
 			if ( is_missing_layer )
 				throw std::runtime_error { "Failed to load required validation layers!" };
 			else {
-				instance_create_info.enabledLayerCount   = static_cast<u32>( required_validation_layers.size() );
-				instance_create_info.ppEnabledLayerNames = required_validation_layers.data();
+				vk_instance_create_info.enabledLayerCount   = static_cast<u32>( required_validation_layers.size() );
+				vk_instance_create_info.ppEnabledLayerNames = required_validation_layers.data();
 			}
 		}
 	} // end-of-function: enable_validation_layers
@@ -143,57 +99,58 @@ namespace { // unnamed namespace for file scope
 	};
 	
 	void
-	enable_instance_extensions( vk::raii::Context &context, vk::InstanceCreateInfo &instance_create_info )
+	enable_instance_extensions(
+		GlfwInstance           &glfw_instance,
+		vk::raii::Context      &vk_context,
+		vk::InstanceCreateInfo &vk_instance_create_info
+	)
 	{
 		spdlog::info( "Enabling instance extensions..." );
 		auto const available_instance_extensions {
-			context.enumerateInstanceExtensionProperties()
+			vk_context.enumerateInstanceExtensionProperties()
 		};
+		
 		// get required GLFW instance extensions:
-		u32  glfw_instance_extension_count;
-		auto glfw_instance_extension_list {
-			glfwGetRequiredInstanceExtensions( &glfw_instance_extension_count )
+		auto const glfw_required_extensions {
+			glfw_instance.get_required_extensions()
 		};
-		if ( glfw_instance_extension_list == nullptr )
-			throw std::runtime_error { "Failed to get required Vulkan instance extensions!" };
-		else {
-			// add required GLFW instance extensions:
-			required_instance_extensions.reserve( glfw_instance_extension_count );
-			for ( i32 i=0; i<glfw_instance_extension_count; ++i )
-				required_instance_extensions.push_back( glfw_instance_extension_list[i] );
-			
-			if constexpr ( g_is_debug_mode ) {
-				// print required and available instance extensions:
-				for ( auto const &required_instance_extension: required_instance_extensions )
-					spdlog::info( "... required instance extension: `{}`", required_instance_extension );
-				for ( auto const &available_instance_extension: available_instance_extensions )
-					spdlog::info( "... available instance extension: `{}`", available_instance_extension.extensionName );
-			}
-			
-			// ensure required instance extensions are available:
-			bool is_adequate { true }; // assume true until proven otherwise
-			for ( auto const &required_instance_extension: required_instance_extensions ) {
-				bool is_supported { false }; // assume false until found
-				for ( auto const &available_instance_extension: available_instance_extensions ) {
-					if ( std::strcmp( required_instance_extension, available_instance_extension.extensionName ) == 0 ) {
-						is_supported = true;
-						break; // early exit
-					}
-				}
-				if ( not is_supported ) {
-					is_adequate = false;
-					spdlog::error( "Missing required instance extension: `{}`", required_instance_extension );
-				}
-			}
-			
-			// handle success or failure:
-			if ( is_adequate ) {
-				// set create info fields:
-				instance_create_info.enabledExtensionCount   = static_cast<u32>( required_instance_extensions.size() );
-				instance_create_info.ppEnabledExtensionNames = required_instance_extensions.data();
-			}
-			else throw std::runtime_error { "Failed to load required instance extensions!" };
+		// add required GLFW instance extensions:
+		required_instance_extensions.reserve( std::size(glfw_required_extensions) );
+		for ( i32 i=0; i<std::size(glfw_required_extensions); ++i )
+			required_instance_extensions.push_back( glfw_required_extensions[i] );
+		
+		if constexpr ( g_is_debug_mode ) {
+			// print required and available instance extensions:
+			for ( auto const &required_instance_extension: required_instance_extensions )
+				spdlog::info( "... required instance extension: `{}`", required_instance_extension );
+			for ( auto const &available_instance_extension: available_instance_extensions )
+				spdlog::info( "... available instance extension: `{}`", available_instance_extension.extensionName );
 		}
+		
+		// ensure required instance extensions are available:
+		bool is_adequate { true }; // assume true until proven otherwise
+		for ( auto const &required_instance_extension: required_instance_extensions ) {
+			bool is_supported { false }; // assume false until found
+			for ( auto const &available_instance_extension: available_instance_extensions ) {
+				if ( std::strcmp( required_instance_extension, available_instance_extension.extensionName ) == 0 ) {
+					is_supported = true;
+					break; // early exit
+				}
+			}
+			if ( not is_supported ) {
+				is_adequate = false;
+				spdlog::error( "Missing required instance extension: `{}`", required_instance_extension );
+			}
+		}
+		
+		// handle success or failure:
+		if ( is_adequate ) {
+			// set create info fields:
+			vk_instance_create_info.enabledExtensionCount   = static_cast<u32>( required_instance_extensions.size() );
+			vk_instance_create_info.ppEnabledExtensionNames = required_instance_extensions.data();
+		}
+		else throw std::runtime_error { "Failed to load required instance extensions!" };
+		
 	} // end-of-function: enable_instance_extensions
 	
 	std::array constexpr required_device_extensions {
@@ -268,10 +225,10 @@ namespace { // unnamed namespace for file scope
 	} // end-of-function: score_physical_device
 	
 	vk::raii::PhysicalDevice
-	select_physical_device( vk::raii::Instance &instance )
+	select_physical_device( vk::raii::Instance &vk_instance )
 	{
 		spdlog::info( "Selecting the most suitable physical device..." );
-		vk::raii::PhysicalDevices physical_devices( instance );
+		vk::raii::PhysicalDevices physical_devices( vk_instance );
 		spdlog::info( "Found {} physical device(s)...", physical_devices.size() );
 		if ( physical_devices.empty() )
 			throw std::runtime_error { "Unable to find any physical devices!" };
@@ -511,21 +468,6 @@ main()
 	else
 		spdlog::info( "Build: RELEASE" );
 	
-	spdlog::info( "Initializing GLFW..." );
-	if ( not glfwInit() ) {
-		spdlog::critical( "Unable to initialize GLFW!" );
-		abort();
-	}
-	
-	if ( not glfwVulkanSupported() ) {
-		spdlog::critical( "Vulkan is unavailable!" );
-		abort();
-	}
-	
-	glfwDefaultWindowHints();
-	glfwWindowHint( GLFW_CLIENT_API, GLFW_NO_API );
-	glfwWindowHint( GLFW_RESIZABLE,  GLFW_FALSE  ); // TODO: remove later
-	
 	try {
 		// TODO: split engine/app versions and make customization point
 		auto const version {
@@ -551,42 +493,31 @@ main()
 			.apiVersion         =  VK_API_VERSION_1_1
 		};
 		
-		vk::InstanceCreateInfo instance_create_info {
+		GlfwInstance glfw_instance {};
+		
+		vk::InstanceCreateInfo vk_instance_create_info {
 			.pApplicationInfo = &app_info
 		};
-		enable_validation_layers(   context, instance_create_info );
-		enable_instance_extensions( context, instance_create_info );
-		vk::raii::Instance instance( context, instance_create_info );
+		enable_validation_layers( context, vk_instance_create_info );
+		enable_instance_extensions( glfw_instance, context, vk_instance_create_info );
+		vk::raii::Instance vk_instance( context, vk_instance_create_info );
 		
 	// Debug messenger:
 		#if !defined( NDEBUG )
-			auto debug_messenger = create_debug_messenger( context, instance ); // TODO: rename
+			auto debug_messenger = create_debug_messenger( context, vk_instance ); // TODO: rename
 		#endif
 		
 	// Physical device:	
 		auto physical_device {
-			select_physical_device( instance )
+			select_physical_device( vk_instance )
 		};
 		
 	// Window:
-		spdlog::info( "Creating GLFW window... ");
-		auto *p_window = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr ); // TODO: RAII wrapper
-		VkSurfaceKHR surface_tmp;
-		auto  result   = glfwCreateWindowSurface(
-			*instance,
-			 p_window,
-			 nullptr,
-			&surface_tmp
-		);
-		
-		vk::raii::SurfaceKHR surface( instance, surface_tmp ); 
-		
-		if ( result != VkResult::VK_SUCCESS )
-			throw std::runtime_error { "Unable to create GLFW window surface!" };
-		
+		Window window( glfw_instance, vk_instance );	
+	
 	// Queue family indices:
 		auto const queue_family_indices {
-			[&physical_device,&surface]() -> std::array<u32,2> { // TODO: refactor into free function(s)
+			[&physical_device,&window]() -> std::array<u32,2> { // TODO: refactor into free function(s)
 				std::optional<u32> present_queue_family_index  {};
 				std::optional<u32> graphics_queue_family_index {};
 				auto const &queue_family_properties {
@@ -595,7 +526,7 @@ main()
 				spdlog::info( "Searching for graphics queue family..." );
 				for ( u32 index{0}; index<std::size(queue_family_properties); ++index ) {
 					bool const supports_graphics { queue_family_properties[index].queueFlags & vk::QueueFlagBits::eGraphics };
-					bool const supports_present  { physical_device.getSurfaceSupportKHR( index, *surface ) == VK_TRUE };
+					bool const supports_present  { physical_device.getSurfaceSupportKHR( index, *window.get_surface() ) == VK_TRUE };
 					if ( supports_graphics and supports_present ) {
 						spdlog::info( "Found queue family that supports both graphics and present!" );
 						present_queue_family_index  = index;
@@ -704,9 +635,9 @@ main()
 		// Swapchain image format:
 		auto const surface_format {
 		   // TODO: refactor into select_swapchain_surface_format function
-			[&physical_device,&surface] {
+			[&physical_device,&window] {
 				auto const available_surface_formats {
-					physical_device.getSurfaceFormatsKHR( *surface ) // TODO: 2KHR?
+					physical_device.getSurfaceFormatsKHR( *window.get_surface() ) // TODO: 2KHR?
 				};
 				for ( auto const &available_surface_format: available_surface_formats )
 					if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb // TODO: refactor out
@@ -719,19 +650,18 @@ main()
 			
 		// Surface capabilities: (TODO: refactor wrap)
 		auto const surface_capabilities {
-			physical_device.getSurfaceCapabilitiesKHR( *surface ) // TODO: 2KHR?
+			physical_device.getSurfaceCapabilitiesKHR( *window.get_surface() ) // TODO: 2KHR?
 		};
 			
 		// Swapchain image extent:
 		vk::Extent2D const surface_extent {
 			// TODO: refactor into get_image_extent function
-			[&p_window,&surface_capabilities] {
+			[&window,&surface_capabilities] {
 				vk::Extent2D result {};
 				if ( surface_capabilities.currentExtent.height == std::numeric_limits<u32>::max() )
 					result = surface_capabilities.currentExtent;
 				else {
-					int width, height;
-					glfwGetWindowSize( p_window, &width, &height );
+					 auto [width, height] = window.get_dimensions();
 					result.width =
 						std::clamp(
 							static_cast<u32>(width),
@@ -750,7 +680,7 @@ main()
 		};
 		
 		auto const swapchain_present_mode {
-			get_present_mode( physical_device, surface, PresentationPriority::eMinimalStuttering )
+			get_present_mode( physical_device, window.get_surface(), PresentationPriority::eMinimalStuttering )
 		};
 		
 		auto const swapchain_framebuffer_count {
@@ -760,7 +690,7 @@ main()
 		spdlog::info( "Creating swapchain..." );
 		// TODO: check present support	
 		vk::SwapchainCreateInfoKHR const swapchain_create_info {
-			.surface               = *surface,
+			.surface               = *window.get_surface(),
 			.minImageCount         =  swapchain_framebuffer_count, // TODO: config refactor
 			.imageFormat           =  surface_format.format,       // TODO: config refactor
 			.imageColorSpace       =  surface_format.colorSpace,   // TODO: config refactor
@@ -1276,16 +1206,11 @@ main()
 ///////////////////////////////////////////////////////////////////////////////////////
 		
 		// main loop:
-		while ( not glfwWindowShouldClose(p_window) ) {
+		while ( not window.was_closed() ) {
+			window.update();
 			// TODO: handle input, update logic, render, draw window
-			glfwSwapBuffers( p_window );
-			glfwPollEvents();
 		}
 		spdlog::info( "Exiting MyTemplate..." );
-		spdlog::info( "Destroying window..." );
-		glfwDestroyWindow( p_window );
-		spdlog::info( "Terminating GLFW..." );
-		glfwTerminate();
 	}
 	catch ( vk::SystemError const &e ) {
 		spdlog::critical( "vk::SystemError: {}", e.what() );
