@@ -40,19 +40,19 @@ namespace // private (file-scope)
 			for ( auto const &target : required_validation_layers ) {
 				bool match_found { false };
 				for ( auto const &layer : available_validation_layers ) {
-					if ( std::strcmp( target, layer.layerName ) == 0 ) {
+					if ( std::strcmp( target, layer.layerName ) == 0 ) [[unlikely]] {
 						match_found = true;
 						break;
 					}
 				}
-				if ( not match_found ) {
+				if ( not match_found ) [[unlikely]] {
 					is_missing_layer = true;
 					spdlog::error( "... missing validation layer: `{}`!", target );
 				}
 			}
 			
 			// handle success or failure:
-			if ( is_missing_layer )
+			if ( is_missing_layer ) [[unlikely]]
 				throw std::runtime_error { "Failed to load required validation layers!" };
 			else {
 				vk_instance_create_info.enabledLayerCount   = static_cast<u32>( required_validation_layers.size() );
@@ -102,24 +102,24 @@ namespace // private (file-scope)
 		for ( auto const &required_instance_extension: required_instance_extensions ) {
 			bool is_supported { false }; // assume false until found
 			for ( auto const &available_instance_extension: available_instance_extensions ) {
-				if ( std::strcmp( required_instance_extension, available_instance_extension.extensionName ) == 0 ) {
+				if ( std::strcmp( required_instance_extension, available_instance_extension.extensionName ) == 0 ) [[unlikely]] {
 					is_supported = true;
 					break; // early exit
 				}
 			}
-			if ( not is_supported ) {
+			if ( not is_supported ) [[unlikely]] {
 				is_adequate = false;
 				spdlog::error( "Missing required instance extension: `{}`", required_instance_extension );
 			}
 		}
 		
 		// handle success or failure:
-		if ( is_adequate ) {
+		if ( is_adequate ) [[likely]] {
 			// set create info fields:
 			vk_instance_create_info.enabledExtensionCount   = static_cast<u32>( required_instance_extensions.size() );
 			vk_instance_create_info.ppEnabledExtensionNames = required_instance_extensions.data();
 		}
-		else throw std::runtime_error { "Failed to load required instance extensions!" };
+		else [[unlikely]] throw std::runtime_error { "Failed to load required instance extensions!" };
 	} // end-of-function: enable_instance_extensions
 	
 	std::array constexpr required_device_extensions {
@@ -145,7 +145,7 @@ namespace // private (file-scope)
 		for ( auto const &required_device_extension: required_device_extensions ) {
 			bool is_supported { false }; // assume false until found
 			for ( auto const &available_device_extension: available_device_extensions ) {
-				if ( std::strcmp( required_device_extension, available_device_extension.extensionName ) == 0 ) {
+				if ( std::strcmp( required_device_extension, available_device_extension.extensionName ) == 0 ) [[unlikely]] {
 					is_supported = true;
 					break; // early exit
 				}
@@ -154,7 +154,7 @@ namespace // private (file-scope)
 				"... support for required device extension `{}`: {}",
 				required_device_extension, is_supported ? "found" : "missing!"
 			);
-			if ( not is_supported )
+			if ( not is_supported ) [[unlikely]]
 				is_adequate = false;
 		}
 		return is_adequate;
@@ -168,19 +168,19 @@ namespace // private (file-scope)
 		spdlog::info( "Scoring physical device `{}`...", properties.deviceName.data() );
 		u32 score { 0 };
 		
-		if ( not is_supporting_extensions( physical_device ) )
+		if ( not is_supporting_extensions( physical_device ) ) [[unlikely]]
 			spdlog::info( "... device extension support: insufficient!" );
-		else if ( features.geometryShader == VK_FALSE )
+		else if ( features.geometryShader == VK_FALSE ) [[unlikely]]
 			spdlog::info( "... geometry shader support: false" );
 		else {
 			spdlog::info( "... swapchain support: true" );
 			spdlog::info( "... geometry shader support: true" );
 			score += properties.limits.maxImageDimension2D;
-			if ( properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu ) {
+			if ( properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu ) [[likely]] {
 				spdlog::info( "... type: discrete" );
 				score += 10'000;
 			}
-			else {
+			else [[unlikely]] {
 				spdlog::info( "... type: integrated" );
 			}
 			// TODO: add more things if needed
@@ -195,7 +195,7 @@ namespace // private (file-scope)
 		spdlog::info( "Selecting the most suitable physical device..." );
 		vk::raii::PhysicalDevices physical_devices( vk_instance );
 		spdlog::info( "... found {} physical device(s)...", physical_devices.size() );
-		if ( physical_devices.empty() )
+		if ( physical_devices.empty() ) [[unlikely]]
 			throw std::runtime_error { "Unable to find any physical devices!" };
 		
 		auto *p_best_match {
@@ -216,14 +216,14 @@ namespace // private (file-scope)
 			}
 		}
 		
-		if ( best_score > 0 ) {
+		if ( best_score > 0 ) [[likely]] {
 			spdlog::info(
 				"... selected physical device `{}` with a final score of: {}",
 				p_best_match->getProperties().deviceName.data(), best_score
 			);
 			return std::make_unique<vk::raii::PhysicalDevice>( std::move( *p_best_match ) );
 		}
-		else throw std::runtime_error { "Physical device does not support swapchains!" };
+		else [[unlikely]] throw std::runtime_error { "Physical device does not support swapchains!" };
 	} // end-of-function: select_physical_device
 	
 	#if !defined( NDEBUG )
@@ -246,11 +246,11 @@ namespace // private (file-scope)
 			auto const &msg_id_name_p { callback_data_p->pMessageIdName  };
 			auto const &msg_p         { callback_data_p->pMessage        };
 			switch (msg_severity) {
-				case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
+				[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
 					spdlog::error( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
 					break;
 				}
-				case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
+				[[likely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
 					spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
 					break;
 				}
@@ -258,7 +258,7 @@ namespace // private (file-scope)
 					spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
 					break;
 				}
-				case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
+				[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
 					spdlog::warn( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
 					break;
 				}
@@ -333,7 +333,7 @@ namespace // private (file-scope)
 					}
 				)
 			};
-			if ( search_result == std::end( extension_properties ) )
+			if ( search_result == std::end( extension_properties ) ) [[unlikely]]
 				throw std::runtime_error { "Could not find " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " extension!" };
 			
 			vk::DebugUtilsMessageSeverityFlagsEXT const severity_flags {
@@ -396,11 +396,11 @@ namespace // private (file-scope)
 				maybe_present_index = index;
 			}
 		}
-		if ( maybe_present_index.has_value() and maybe_graphics_index.has_value() ) {
+		if ( maybe_present_index.has_value() and maybe_graphics_index.has_value() ) [[likely]] {
 			bool const are_separate {
 				maybe_present_index.value() != maybe_graphics_index.value()
 			};
-			if ( are_separate )
+			if ( are_separate ) [[unlikely]]
 				spdlog::info( "... selected different queue families for graphics and present." );
 			return QueueFamilyIndices {
 				.present      = maybe_present_index.value(),
@@ -408,7 +408,7 @@ namespace // private (file-scope)
 				.are_separate = are_separate
 			};
 		}
-		else throw std::runtime_error { "Queue family support for either graphics or present missing!" };
+		else [[unlikely]] throw std::runtime_error { "Queue family support for either graphics or present missing!" };
 	} // end-of-function: select_queue_family_indices
 	
 	[[nodiscard]] auto
@@ -433,7 +433,7 @@ namespace // private (file-scope)
 			}
 		);
 		
-		if ( queue_family_indices.are_separate ) {
+		if ( queue_family_indices.are_separate ) [[unlikely]] {
 			queue_create_infos.push_back(
 				vk::DeviceQueueCreateInfo {
 					.queueFamilyIndex =  queue_family_indices.graphics,
@@ -558,6 +558,5 @@ Renderer::get_window()
 {
 	return *m_p_window;
 }
-
 
 // EOF

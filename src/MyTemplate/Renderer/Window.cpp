@@ -27,7 +27,7 @@ Window::Window( [[maybe_unused]] GlfwInstance &, vk::raii::Instance &instance )
 		)
 	};
 	
-	if ( result != VkResult::VK_SUCCESS )
+	if ( result != VkResult::VK_SUCCESS ) [[unlikely]]
 		throw std::runtime_error { "Unable to create GLFW window surface!" };
 	
 	m_p_surface = std::make_unique<vk::raii::SurfaceKHR>( instance, surface_tmp );
@@ -44,7 +44,7 @@ Window::~Window() noexcept
 {
 	spdlog::info( "Destroying a Window instance..." );
 	// NOTE: Vulkan-Hpp should take care of cleaning up the surface for us
-	if ( m_p_window ) {
+	if ( m_p_window ) [[likely]] {
 		spdlog::info( "... destroying GLFW window" );
 		glfwDestroyWindow( m_p_window );
 	}

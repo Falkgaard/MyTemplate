@@ -16,8 +16,6 @@ Doxygen
 
 the big TODO
 
-Swapchain
-Image View
 Depth Buffer
 Uniform Buffer
 Pipeline Layout

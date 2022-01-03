@@ -7,13 +7,13 @@
 GlfwInstance::GlfwInstance()
 {
 	spdlog::info( "Constructing a GlfwInstance instance..." );
-	if ( sm_glfw_user_count == 0 ) {
+	if ( sm_glfw_user_count == 0 ) [[likely]] {
 		spdlog::info( "... initializing GLFW" );
 		
-		if ( not glfwInit() )
+		if ( not glfwInit() ) [[unlikely]]
 			throw std::runtime_error { "Unable to initialize GLFW!" };
 		
-		else if ( not glfwVulkanSupported() )
+		else if ( not glfwVulkanSupported() ) [[unlikely]]
 			throw std::runtime_error { "Vulkan is unavailable!" };
 	}
 	++sm_glfw_user_count;
@@ -34,7 +34,7 @@ GlfwInstance::~GlfwInstance() noexcept
 {
 	spdlog::info( "Destroying GlfwInstance..." );
 	--sm_glfw_user_count;
-	if ( sm_glfw_user_count == 0 ) {
+	if ( sm_glfw_user_count == 0 ) [[likely]] {
 		spdlog::info( "... terminating GLFW" );
 		glfwTerminate();
 	}
@@ -48,7 +48,7 @@ GlfwInstance::get_required_extensions() const
 		glfwGetRequiredInstanceExtensions( &required_extensions_count )
 	};
 	
-	if ( required_extensions_list == nullptr )
+	if ( required_extensions_list == nullptr ) [[unlikely]]
 		throw std::runtime_error { "Failed to get required Vulkan instance extensions!" };
 	
 	return { required_extensions_list, required_extensions_count };

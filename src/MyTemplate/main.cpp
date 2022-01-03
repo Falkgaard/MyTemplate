@@ -334,7 +334,7 @@ main()
 		auto &window {
 			renderer.get_window()
 		};
-		while ( window.was_closed() == false ) {
+		while ( window.was_closed() == false ) [[likely]] {
 			window.update();
 			// TODO: handle input, update logic, render, draw window
 		}

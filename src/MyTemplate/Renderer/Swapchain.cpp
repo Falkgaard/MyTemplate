@@ -16,8 +16,8 @@ namespace { // private (file-scope)
 			physical_device.getSurfaceFormatsKHR( *window.get_surface() ) // TODO: 2KHR?
 		};
 		for ( auto const &available_surface_format: available_surface_formats )
-			if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb             // TODO: refactor out
-			and  available_surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) { //       ^ ditto
+			if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb               // TODO: refactor out
+			and  available_surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) [[unlikely]] { // ^ ditto
 				spdlog::info(
 					"... selected surface format `{}` in color space `{}`",
 					to_string( available_surface_format.format     ),
@@ -34,7 +34,7 @@ namespace { // private (file-scope)
 	{
 		spdlog::info( "Selecting swapchain surface extent..." );
 		vk::Extent2D result {};
-		if ( surface_capabilities.currentExtent.height == std::numeric_limits<u32>::max() )
+		if ( surface_capabilities.currentExtent.height == std::numeric_limits<u32>::max() ) // TODO: unlikely? likely?
 			result = surface_capabilities.currentExtent;
 		else {
 			auto [width, height] = window.get_dimensions();
@@ -84,14 +84,14 @@ namespace { // private (file-scope)
 			std::ranges::find( available_present_modes, ideal_present_mode )
 			!= std::end( available_present_modes )
 		};
-		if ( has_support_for_ideal_mode ) {
+		if ( has_support_for_ideal_mode ) [[likely]] {
 			spdlog::info(
 				"... ideal present mode `{}` is supported by device!",
 				to_string( ideal_present_mode )
 			);
 			return ideal_present_mode;
 		}
-		else {
+		else [[unlikely]] {
 			spdlog::warn(
 				"... ideal present mode is not supported by device; using fallback present mode `{}`!",
 				to_string( fallback_present_mode )
