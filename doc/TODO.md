@@ -10,7 +10,7 @@ stb stuff
 Spir-V shader compilation
 Sol 3.2 + LuaJIT 2.1.x-beta3+
 EnTT 3.9.0
-Doxxygen
+Doxygen
 
 ## Code-wise roadmap
 
