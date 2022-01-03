@@ -13,8 +13,8 @@ project (
 )
 
 configure_file ( # for exporting info to C++ (e.g. project version)
-	"${CMAKE_CURRENT_SOURCE_DIR}/src/info.hh.in"
-	"${CMAKE_CURRENT_SOURCE_DIR}/src/info.hh"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}/info.hpp.in"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}/info.hpp"
 )
 
 set          ( CMAKE_EXPORT_COMPILE_COMMANDS       ON ) # generate compile_commands.json
@@ -25,14 +25,12 @@ set          ( CMAKE_POLICY_DEFAULT_CMP0069       NEW )
 
 add_executable (
 	${PROJECT_NAME}
-	src/main.cc
+	"src/${PROJECT_NAME}/main.cpp"
 )
 
 target_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS )
 target_compile_definitions( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_NONE )
 target_compile_definitions( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_VULKAN )
-#add_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS            )
-#add_compile_definitions( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_NONE GLFW_INCLUDE_VULKAN )
 
 target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20                                        ) # Set C++ standard to C++20
 # TODO: target_compile_options     ( ${PROJECT_NAME} PUBLIC "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->" ) # To help ensure cross-platform compatibility
@@ -51,7 +49,7 @@ CPMAddPackage( "gh:KhronosGroup/Vulkan-Headers#a15237165443ba1ef430ed332745f9a99
 CPMAddPackage( "gh:falkgaard/fHash@0.1"                                                  ) # fRNG    v0.1.0
 CPMAddPackage( "gh:falkgaard/fRNG@0.1"                                                   ) # fHash   v0.1.0
 # ImGui is directly in src/
-target_link_libraries( ${PROJECT_NAME} PUBLIC
+target_link_libraries( ${PROJECT_NAME} PRIVATE
 	doctest::doctest
 	spdlog::spdlog
 	fmt::fmt
@@ -60,12 +58,65 @@ target_link_libraries( ${PROJECT_NAME} PUBLIC
 	Vulkan::Headers
 	# ^ add library dependency targets here
 )
-target_link_libraries( ${PROJECT_NAME} PUBLIC
+target_link_libraries( ${PROJECT_NAME} PRIVATE
 	fHash
 	fRNG
 	# ^ add header only library dependency targets here
 )
 
-# TODO: OpenMP, intrinsics, vulkan, imgui...
+target_precompile_headers( ${PROJECT_NAME}
+PUBLIC  # project headers here:
+	
+PRIVATE # dependency headers here:
+	# TODO: doctest headers
+	
+	<spdlog/spdlog.h>
+	
+	<fmt/core.h>
+	                                
+	<GLFW/glfw3.h>
+	
+	<glm/common.hpp>
+	<glm/exponential.hpp>
+	<glm/geometric.hpp>
+	<glm/matrix.hpp>
+	<glm/trigonometric.hpp>
+	<glm/ext/vector_float3.hpp>
+	<glm/ext/matrix_float4x4.hpp>
+	<glm/ext/matrix_transform.hpp>
+	<glm/ext/matrix_clip_space.hpp>
+	<glm/ext/scalar_constants.hpp>
+	# TODO: add more here when used
+	
+	<vulkan/vulkan.hpp>
+	<vulkan/vulkan_raii.hpp>
+	
+	<fRNG/core.hh>
+	                                
+	[["imgui/imgui.h"]]
+	[["imgui/imgui_impl_glfw.h"]]
+	[["imgui/imgui_impl_vulkan.h"]]
+	
+	<iostream>
+	<fstream>
+	<array>
+	<vector>
+	<string>
+	<string_view>
+	<optional>
+	<algorithm>
+	<ranges>
+	# TODO: add more here when used
+	                                
+	<cstdlib>
+	<cstdio>
+	<cstring>
+	<cstdint>
+	<cinttypes>
+	<cmath>
+	# TODO: add more here when used
+)
+
+# TODO: OpenMP, intrinsics, imgui...
 # TODO: Presets
-# TODO: Pre-compiled headers
+# TODO: Get a proper CMake package for Imgui...

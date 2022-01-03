@@ -1,19 +1,16 @@
-#include "info.hh"
+#include "MyTemplate/info.hpp"
 
-#include "fmt/core.h"
-#include "spdlog/spdlog.h"
+#include <fmt/core.h>
+#include <spdlog/spdlog.h>
 
-#include "fRNG/core.hh"
+#include <fRNG/core.hh>
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_vulkan.h"
-//#define  GLFW_INCLUDE_NONE
-//#define  GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-//#define  VULKAN_HPP_NO_CONSTRUCTORS
-#include "vulkan/vulkan.hpp"
-#include "vulkan/vulkan_raii.hpp"
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_raii.hpp>
 
 #include <glm/common.hpp>
 #include <glm/exponential.hpp>
@@ -28,9 +25,11 @@
 
 #include <iostream>
 #include <array>
+#include <vector>
 #include <optional>
-#include <algorithm>
 #include <ranges>
+#include <string>
+#include <string_view>
 #include <algorithm>
 #include <fstream>
 
@@ -39,6 +38,10 @@
 #include <cstring>
 #include <cstdint>
 #include <cinttypes>
+#include <cmath>
+
+#include "MyTemplate/Common/aliases.hpp"
+#include "MyTemplate/Graphics/Texture.hpp"
 
 using u8  = std::uint8_t;
 using u16 = std::uint16_t;
@@ -1225,8 +1228,48 @@ main()
 					.depthBiasConstantFactor = 0.0f,     // mostly just useful for shadow maps
 					.depthBiasClamp          = 0.0f,     // mostly just useful for shadow maps
 					.depthBiasSlopeFactor    = 0.0f,     // mostly just useful for shadow maps
-					.lineWidth               = 1.0f, // >1 requires wideLines GPU feature
+					.lineWidth               = 1.0f      // >1 requires wideLines GPU feature
 				};
+				
+			// MSAA:
+				
+				vk::PipelineMultisampleStateCreateInfo const
+				pipeline_multisample_state_create_info
+				{  // TODO: revisit later
+					.rasterizationSamples  = vk::SampleCountFlagBits::e1,
+					.sampleShadingEnable   = VK_FALSE, // unused; otherwise enables MSAA; requires GPU feature
+					.minSampleShading      = 1.0f,
+					.pSampleMask           = nullptr,
+					.alphaToCoverageEnable = VK_FALSE,
+					.alphaToOneEnable      = VK_FALSE 
+				};
+				
+			// Depth & stencil testing:
+				
+				vk::PipelineDepthStencilStateCreateInfo const
+				pipeline_depth_stencil_state_create_info
+				{
+					// TODO: revisit later
+				};
+				
+			// Color blending:
+				
+				vk::PipelineColorBlendAttachmentState const
+				pipeline_color_blend_attachment_state
+				{
+					.blendEnable         = VK_FALSE,
+					.srcColorBlendFactor = vk::BlendFactor::eOne,
+					.dstColorBlendFactor = vk::BlendFactor::eZero,
+					.colorBlendOp        = vk::BlendOp::eAdd,
+					.srcAlphaBlendFactor = vk::BlendFactor::eOne,
+					.dstAlphaBlendFactor = vk::BlendFactor::eZero,
+					.alphaBlendOp        = vk::BlendOp::eAdd,
+					.colorWriteMask      = vk::ColorComponentFlagBits::eR
+					                     | vk::ColorComponentFlagBits::eG
+					                     | vk::ColorComponentFlagBits::eB
+					                     | vk::ColorComponentFlagBits::eA,
+				};
+				
 			} // end-of-lambda-body
 		}; // end-of-lambda: make_graphics_pipeline
 		
