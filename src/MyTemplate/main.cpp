@@ -729,7 +729,7 @@ main()
 			image_view_create_info.image = static_cast<vk::Image>( image );
 			image_views.emplace_back( device, image_view_create_info );
 		}
-		
+#if 0
 		auto const find_memory_type_index {
 			[](
 				vk::PhysicalDeviceMemoryProperties const &physical_device_memory_properties,
@@ -746,7 +746,7 @@ main()
 				throw std::runtime_error { "Unable to find an index of a suitable memory type!" };
 			}
 		};
-#if 0		
+		
 	// Depth buffer:
 		spdlog::info( "Creating depth buffer image(s)..." );
 		// TODO: Look into more efficient allocation (batch allocation)
