@@ -34,9 +34,9 @@ add_executable (
 	"src/${PROJECT_NAME}/Renderer/Texture.cpp"
 )
 
-target_compile_definitions( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS )
-target_compile_definitions( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_NONE )
-target_compile_definitions( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_VULKAN )
+target_compile_definitions ( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS )
+target_compile_definitions ( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_NONE          )
+target_compile_definitions ( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_VULKAN        )
 
 target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20                                        ) # Set C++ standard to C++20
 # TODO: target_compile_options     ( ${PROJECT_NAME} PUBLIC "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->" ) # To help ensure cross-platform compatibility
