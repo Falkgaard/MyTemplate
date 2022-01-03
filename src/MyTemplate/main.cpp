@@ -44,6 +44,7 @@
 
 #include "MyTemplate/Renderer/GlfwInstance.hpp"
 #include "MyTemplate/Renderer/Window.hpp"
+#include "MyTemplate/Renderer/Renderer.hpp"
 #include "MyTemplate/Renderer/Texture.hpp"
 
 namespace { // unnamed namespace for file scope

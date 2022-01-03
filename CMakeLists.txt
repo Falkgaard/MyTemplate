@@ -27,6 +27,7 @@ add_executable (
 	${PROJECT_NAME}
 	"src/${PROJECT_NAME}/main.cpp"
 	"src/${PROJECT_NAME}/Renderer/GlfwInstance.cpp"
+	"src/${PROJECT_NAME}/Renderer/Renderer.cpp"
 	"src/${PROJECT_NAME}/Renderer/Window.cpp"
 )
 
