@@ -139,7 +139,7 @@ Swapchain::Swapchain(
 	QueueFamilyIndices       &queue_family_indices
 )
 {
-	spdlog::info( "Creating Swapchain instance..." );
+	spdlog::info( "Constructing a Swapchain instance..." );
 	
 	m_surface_format       = select_surface_format( physical_device, window );
 	m_surface_capabilities = physical_device.getSurfaceCapabilitiesKHR( *window.get_surface() );

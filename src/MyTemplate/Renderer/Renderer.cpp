@@ -510,7 +510,7 @@ namespace // private (file-scope)
 
 Renderer::Renderer()
 {
-	spdlog::info( "Creating Renderer instance..." );
+	spdlog::info( "Constructing a Renderer instance..." );
 	m_p_glfw_instance      = make_glfw_instance();
 	m_p_vk_context         = make_vk_context();
 	m_p_vk_instance        = make_vk_instance( *m_p_glfw_instance, *m_p_vk_context );

@@ -6,7 +6,7 @@
 
 GlfwInstance::GlfwInstance()
 {
-	spdlog::info( "Creating GlfwInstance..." );
+	spdlog::info( "Constructing a GlfwInstance instance..." );
 	if ( sm_glfw_user_count == 0 ) {
 		spdlog::info( "... initializing GLFW" );
 		
