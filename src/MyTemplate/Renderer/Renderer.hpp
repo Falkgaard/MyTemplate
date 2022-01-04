@@ -9,6 +9,7 @@
 class GlfwInstance;
 class Window;
 class Swapchain;
+class Pipeline;
 namespace vk::raii {
 	class Context;
 	class Instance;
@@ -46,7 +47,8 @@ class Renderer final {
 		Renderer( Renderer       && ) noexcept;
 		~Renderer()                   noexcept;
 		// TODO: update, draw, load_texture, etc?
-		[[nodiscard]] Window & get_window();
+		[[nodiscard]] Window const & get_window() const;
+		[[nodiscard]] Window       & get_window();
 	private:
 		// NOTE: declaration order here is very important!
 		std::unique_ptr<GlfwInstance>                         m_p_glfw_instance      ;
@@ -64,6 +66,7 @@ class Renderer final {
 		std::unique_ptr<vk::raii::CommandPool>                m_p_command_pool       ;
 		std::unique_ptr<vk::raii::CommandBuffers>             m_p_command_buffers    ;
 		std::unique_ptr<Swapchain>                            m_p_swapchain          ;
+		std::unique_ptr<Pipeline>                             m_p_pipeline           ;
 		// TODO: queue_family_indices as well? (array)
 		#if 0
 			// LONG TODO:

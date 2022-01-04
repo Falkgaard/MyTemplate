@@ -13,7 +13,9 @@
 namespace { // private (file-scope)
 
 	[[nodiscard]] auto
-	load_binary_from_file( std::string const &binary_filename )
+	load_binary_from_file(
+		std::string const &binary_filename
+	)
 	{  // TODO: null_terminated_string_view?
 		spdlog::info( "Attempting to open binary file `{}`...", binary_filename );
 		std::ifstream binary_file {
@@ -39,7 +41,7 @@ namespace { // private (file-scope)
 				
 	[[nodiscard]] auto
 	make_shader_module_from_binary(
-		vk::raii::Device        &logical_device,
+		vk::raii::Device  const &logical_device,
 		std::vector<char> const &shader_binary
 	)
 	{
@@ -55,8 +57,8 @@ namespace { // private (file-scope)
 	
 	[[nodiscard]] auto
 	make_shader_module_from_file(
-		vk::raii::Device  &logical_device,
-		std::string const &shader_spirv_bytecode_filename
+		vk::raii::Device const &logical_device,
+		std::string      const &shader_spirv_bytecode_filename
 	)
 	{
 		spdlog::info( "Creating shader module from shader SPIR-V bytecode file..." );
@@ -67,7 +69,9 @@ namespace { // private (file-scope)
 	} // end-of-function: make_shader_module_from_file
 	
 	[[nodiscard]] auto
-	make_pipeline_layout( vk::raii::Device &logical_device )
+	make_pipeline_layout(
+		vk::raii::Device const &logical_device
+	)
 	{
 		spdlog::info( "Creating pipeline layout..." );
 		return std::make_unique<vk::raii::PipelineLayout>(
@@ -82,7 +86,10 @@ namespace { // private (file-scope)
 	} // end-of-function: make_pipeline_layout
 	
 	[[nodiscard]] auto
-	make_render_pass( vk::raii::Device &logical_device, Swapchain const &swapchain )
+	make_render_pass(
+		vk::raii::Device const &logical_device,
+		Swapchain        const &swapchain
+	)
 	{
 		spdlog::info( "Creating render pass..." );
 		vk::AttachmentDescription const
@@ -124,7 +131,7 @@ namespace { // private (file-scope)
 } // end-of-unnamed-namespace
 
 // TODO: take swapchain as second arg?
-Pipeline::Pipeline( vk::raii::Device &logical_device, Swapchain const &swapchain )
+Pipeline::Pipeline( vk::raii::Device const &logical_device, Swapchain const &swapchain )
 {
 	spdlog::info( "Constructing Pipeline instance..." );
 	
@@ -312,6 +319,11 @@ Pipeline::Pipeline( vk::raii::Device &logical_device, Swapchain const &swapchain
 			.basePipelineIndex   =   -1,
 		}
 	);
+} // end-of-function: Pipeline::Pipeline
+
+Pipeline::~Pipeline() noexcept
+{
+	spdlog::info( "Destroying Pipeline instance..." );
 } // end-of-function: Pipeline::Pipeline
 
 // EOF

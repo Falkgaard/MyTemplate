@@ -12,7 +12,7 @@ class Window final
 {
 public:
 	struct Dimensions final { int width, height; };
-	Window( GlfwInstance &, vk::raii::Instance &instance );
+	Window( GlfwInstance const &, vk::raii::Instance const &instance );
 	Window(                ) = delete;	
 	Window( Window const & ) = delete;
 	Window( Window &&      ) noexcept;

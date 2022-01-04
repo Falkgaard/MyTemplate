@@ -2,6 +2,7 @@
 #include "MyTemplate/Renderer/GlfwInstance.hpp"
 #include "MyTemplate/Renderer/Window.hpp"
 #include "MyTemplate/Renderer/Swapchain.hpp"
+#include "MyTemplate/Renderer/Pipeline.hpp"
 #include "MyTemplate/Common/utility.hpp"
 #include "MyTemplate/info.hpp"
 #include <spdlog/spdlog.h>
@@ -23,8 +24,8 @@ namespace // private (file-scope)
 	
 	void
 	enable_validation_layers(
-		vk::raii::Context      &vk_context,
-		vk::InstanceCreateInfo &vk_instance_create_info
+		vk::raii::Context const &vk_context,
+		vk::InstanceCreateInfo  &vk_instance_create_info
 	)
 	{
 		if constexpr ( g_is_debug_mode ) { // logic is only required for debug builds
@@ -70,9 +71,9 @@ namespace // private (file-scope)
 	
 	void
 	enable_instance_extensions(
-		GlfwInstance           &glfw_instance,
-		vk::raii::Context      &vk_context,
-		vk::InstanceCreateInfo &vk_instance_create_info
+		GlfwInstance      const &glfw_instance,
+		vk::raii::Context const &vk_context,
+		vk::InstanceCreateInfo  &vk_instance_create_info
 	)
 	{
 		spdlog::info( "Enabling instance extensions..." );
@@ -127,7 +128,9 @@ namespace // private (file-scope)
 	};
 	
 	[[nodiscard]] bool
-	is_supporting_extensions( vk::raii::PhysicalDevice const &physical_device )
+	is_supporting_extensions(
+		vk::raii::PhysicalDevice const &physical_device
+	)
 	{
 		auto const &available_device_extensions {
 			physical_device.enumerateDeviceExtensionProperties()
@@ -161,7 +164,9 @@ namespace // private (file-scope)
 	} // end-of-function: is_supporting_extensions
 	
 	[[nodiscard]] u32
-	score_physical_device( vk::raii::PhysicalDevice const &physical_device )
+	score_physical_device(
+		vk::raii::PhysicalDevice const &physical_device
+	)
 	{
 		auto const properties { physical_device.getProperties() }; // TODO: KHR2?
 		auto const features   { physical_device.getFeatures()   }; // TODO: 2KHR?
@@ -190,7 +195,9 @@ namespace // private (file-scope)
 	} // end-of-function: score_physical_device
 	
 	[[nodiscard]] auto
-	select_physical_device( vk::raii::Instance &vk_instance )
+	select_physical_device(
+		vk::raii::Instance const &vk_instance
+	)
 	{
 		spdlog::info( "Selecting the most suitable physical device..." );
 		vk::raii::PhysicalDevices physical_devices( vk_instance );
@@ -283,7 +290,10 @@ namespace // private (file-scope)
 	} // end-of-function: make_glfw_instance
 	
 	[[nodiscard]] auto
-	make_vk_instance( GlfwInstance &glfw_instance, vk::raii::Context &vk_context )
+	make_vk_instance(
+		GlfwInstance      const &glfw_instance,
+		vk::raii::Context const &vk_context
+	)
 	{
 		spdlog::info( "Creating Vulkan instance..." );
 		
@@ -315,7 +325,10 @@ namespace // private (file-scope)
 	
 	#if !defined( NDEBUG )
 		[[nodiscard]] auto
-		make_debug_messenger( vk::raii::Context &vk_context, vk::raii::Instance &vk_instance )
+		make_debug_messenger(
+			vk::raii::Context  const &vk_context,
+			vk::raii::Instance const &vk_instance
+		)
 		{
 			spdlog::info( "Creating debug messenger..." );
 			
@@ -359,14 +372,20 @@ namespace // private (file-scope)
 	#endif
 	
 	[[nodiscard]] auto
-	make_window( GlfwInstance &glfw_instance, vk::raii::Instance &vk_instance )
+	make_window(
+		GlfwInstance       const &glfw_instance,
+		vk::raii::Instance const &vk_instance
+	)
 	{
 		spdlog::info( "Creating window..." );
 		return std::make_unique<Window>( glfw_instance, vk_instance );
 	} // end-of-function: make_window
 	
 	[[nodiscard]] auto
-	select_queue_family_indices( vk::raii::PhysicalDevice &physical_device, Window &window )
+	select_queue_family_indices(
+		vk::raii::PhysicalDevice const &physical_device,
+		Window                   const &window
+	)
 	{
 		std::optional<u32> maybe_present_index  {};
 		std::optional<u32> maybe_graphics_index {};
@@ -414,8 +433,8 @@ namespace // private (file-scope)
 	
 	[[nodiscard]] auto
 	make_logical_device(
-		vk::raii::PhysicalDevice &physical_device,
-		QueueFamilyIndices const &queue_family_indices
+		vk::raii::PhysicalDevice const &physical_device,
+		QueueFamilyIndices       const &queue_family_indices
 	)
 	{
 		spdlog::info( "Creating logical device..." );
@@ -458,17 +477,23 @@ namespace // private (file-scope)
 	} // end-of-function: make_logical_device
 	
 	[[nodiscard]] auto
-	make_queue( vk::raii::Device &logical_device, u32 const queue_family_index, u32 const queue_index )
+	make_queue(
+		vk::raii::Device const &logical_device,
+		u32              const  queue_family_index,
+		u32              const  queue_index
+	)
 	{ // TODO: refactor away third arg and use automated tracking + exceptions
 		spdlog::info( "Creating handle for queue #{} of queue family #{}...", queue_index, queue_family_index );
-		auto queue {
+		return std::make_unique<vk::raii::Queue>(
 			logical_device.getQueue( queue_family_index, queue_index )
-		};
-		return std::make_unique<vk::raii::Queue>( std::move(queue) );
+		);
 	} // end-of-function: make_queue
 	
 	[[nodiscard]] auto
-	make_command_pool( vk::raii::Device &logical_device, u32 const graphics_queue_family_index )
+	make_command_pool(
+		vk::raii::Device const &logical_device,
+		u32              const  graphics_queue_family_index
+	)
 	{
 		spdlog::info( "Creating command buffer pool..." );
 		return std::make_unique<vk::raii::CommandPool>(
@@ -483,10 +508,10 @@ namespace // private (file-scope)
 	
 	[[nodiscard]] auto
 	make_command_buffers(
-		vk::raii::Device       &logical_device,
-		vk::raii::CommandPool  &command_pool,
-		vk::CommandBufferLevel  level,
-		u32 const               command_buffer_count
+		vk::raii::Device       const &logical_device,
+		vk::raii::CommandPool  const &command_pool,
+		vk::CommandBufferLevel const  level,
+		u32                    const  command_buffer_count
 	)
 	{
 		spdlog::info( "Creating {} command buffer(s)...", command_buffer_count );
@@ -502,14 +527,24 @@ namespace // private (file-scope)
 	
 	[[nodiscard]] auto
 	make_swapchain(
-		vk::raii::PhysicalDevice &physical_device,
-		vk::raii::Device         &logical_device,
-		Window                   &window,
-		QueueFamilyIndices       &queue_family_indices
+		vk::raii::PhysicalDevice const &physical_device,
+		vk::raii::Device         const &logical_device,
+		Window                   const &window,
+		QueueFamilyIndices       const &queue_family_indices
 	)
 	{
 		spdlog::info( "Creating swapchain..." );
 		return std::make_unique<Swapchain>( physical_device, logical_device, window, queue_family_indices );
+	} // end-of-function: make_swapchain
+	
+	[[nodiscard]] auto
+	make_pipeline(
+		vk::raii::Device const &logical_device,
+		Swapchain        const &swapchain
+	)
+	{
+		spdlog::info( "Creating pipeline..." );
+		return std::make_unique<Pipeline>( logical_device, swapchain );
 	} // end-of-function: make_swapchain
 	
 } // end-of-unnamed-namespace
@@ -532,24 +567,26 @@ Renderer::Renderer()
 	m_p_command_pool       = make_command_pool( *m_p_logical_device, m_queue_family_indices.graphics );
 	m_p_command_buffers    = make_command_buffers( *m_p_logical_device, *m_p_command_pool, vk::CommandBufferLevel::ePrimary, 1 );
 	m_p_swapchain          = make_swapchain( *m_p_physical_device, *m_p_logical_device, *m_p_window, m_queue_family_indices );
+	m_p_pipeline           = make_pipeline( *m_p_logical_device, *m_p_swapchain );
 }
 
 Renderer::Renderer( Renderer &&other ) noexcept:
-	m_p_glfw_instance      { std::exchange( other.m_p_glfw_instance,      nullptr ) },
-	m_p_vk_context         { std::exchange( other.m_p_vk_context,         nullptr ) },
-	m_p_vk_instance        { std::exchange( other.m_p_vk_instance,        nullptr ) },
-	#if !defined( NDEBUG )                   
-	m_p_debug_messenger    { std::exchange( other.m_p_debug_messenger,    nullptr ) },
+	m_p_glfw_instance      { std::move( other.m_p_glfw_instance   ) },
+	m_p_vk_context         { std::move( other.m_p_vk_context      ) },
+	m_p_vk_instance        { std::move( other.m_p_vk_instance     ) },
+	#if !defined( NDEBUG )
+	m_p_debug_messenger    { std::move( other.m_p_debug_messenger ) },
 	#endif
-	m_p_window             { std::exchange( other.m_p_window,             nullptr ) },
-	m_p_physical_device    { std::exchange( other.m_p_physical_device,    nullptr ) },
-	m_queue_family_indices { other.m_queue_family_indices                           },
-	m_p_logical_device     { std::exchange( other.m_p_logical_device,     nullptr ) },
-	m_p_graphics_queue     { std::exchange( other.m_p_graphics_queue,     nullptr ) },
-	m_p_present_queue      { std::exchange( other.m_p_present_queue,      nullptr ) },
-	m_p_command_pool       { std::exchange( other.m_p_command_pool,       nullptr ) },
-	m_p_command_buffers    { std::exchange( other.m_p_command_buffers,    nullptr ) },
-	m_p_swapchain          { std::exchange( other.m_p_swapchain,          nullptr ) }
+	m_p_window             { std::move( other.m_p_window          ) },
+	m_p_physical_device    { std::move( other.m_p_physical_device ) },
+	m_queue_family_indices { other.m_queue_family_indices           },
+	m_p_logical_device     { std::move( other.m_p_logical_device  ) },
+	m_p_graphics_queue     { std::move( other.m_p_graphics_queue  ) },
+	m_p_present_queue      { std::move( other.m_p_present_queue   ) },
+	m_p_command_pool       { std::move( other.m_p_command_pool    ) },
+	m_p_command_buffers    { std::move( other.m_p_command_buffers ) },
+	m_p_swapchain          { std::move( other.m_p_swapchain       ) },
+	m_p_pipeline           { std::move( other.m_p_pipeline        ) }
 {
 	spdlog::info( "Moving Renderer instance..." );
 }
@@ -557,6 +594,12 @@ Renderer::Renderer( Renderer &&other ) noexcept:
 Renderer::~Renderer() noexcept
 {
 	spdlog::info( "Destroying Renderer instance..." );
+}
+
+[[nodiscard]] Window const &
+Renderer::get_window() const
+{
+	return *m_p_window;
 }
 
 [[nodiscard]] Window &

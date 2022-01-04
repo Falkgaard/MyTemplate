@@ -30,7 +30,7 @@
 #include "MyTemplate/Renderer/Renderer.hpp"
 #include "MyTemplate/Renderer/Window.hpp"
 
-	int
+int
 main()
 {
 	std::atexit( spdlog::shutdown );

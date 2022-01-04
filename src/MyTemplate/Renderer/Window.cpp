@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 // NOTE: the GlfwInstance reference is just to ensure that GLFW is initialized
-Window::Window( [[maybe_unused]] GlfwInstance &, vk::raii::Instance &instance )
+Window::Window( [[maybe_unused]] GlfwInstance const &, vk::raii::Instance const &instance )
 {
 	spdlog::info( "Constructing a Window instance..." );
 	

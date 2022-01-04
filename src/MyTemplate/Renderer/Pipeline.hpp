@@ -16,7 +16,7 @@ namespace vk::raii {
 
 class Pipeline {
 	public:
-		Pipeline( vk::raii::Device &logical_device, Swapchain const &swapchain );
+		Pipeline( vk::raii::Device const &logical_device, Swapchain const &swapchain );
 		~Pipeline() noexcept;
 	private:
 		std::unique_ptr<vk::raii::ShaderModule>    m_p_vertex_shader_module;
