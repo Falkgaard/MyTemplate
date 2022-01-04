@@ -211,4 +211,14 @@ Swapchain::~Swapchain() noexcept
 	spdlog::info( "Destroying Swapchain instance..." );
 }
 
+[[nodiscard]] vk::Extent2D const &
+Swapchain::get_surface_extent() const {
+	return m_surface_extent;
+}
+
+[[nodiscard]] vk::SurfaceFormatKHR const &
+Swapchain::get_surface_format() const {
+	return m_surface_format;
+}
+
 // EOF

@@ -23,6 +23,8 @@ class Swapchain final {
 		Swapchain( Swapchain       && ) noexcept;
 		~Swapchain()                    noexcept;
 		// TODO: assignment ops?
+		[[nodiscard]] vk::Extent2D         const & get_surface_extent() const;
+		[[nodiscard]] vk::SurfaceFormatKHR const & get_surface_format() const;
 	private:
 		// NOTE: declaration order here matters!
 		vk::SurfaceFormatKHR              m_surface_format       ;
