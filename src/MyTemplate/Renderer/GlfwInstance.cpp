@@ -21,18 +21,18 @@ GlfwInstance::GlfwInstance()
 
 GlfwInstance::GlfwInstance( [[maybe_unused]] GlfwInstance const & )
 {
-	spdlog::info( "Copying GlfwInstance..." );
+	spdlog::info( "Copying a GlfwInstance instance..." );
 	++sm_glfw_user_count;
 }
 
 GlfwInstance::GlfwInstance( [[maybe_unused]] GlfwInstance && ) noexcept
 {
-	spdlog::info( "Moving GlfwInstance..." );
+	spdlog::info( "Moving a GlfwInstance instance..." );
 }
 
 GlfwInstance::~GlfwInstance() noexcept
 {
-	spdlog::info( "Destroying GlfwInstance..." );
+	spdlog::info( "Destroying a GlfwInstance instance..." );
 	--sm_glfw_user_count;
 	if ( sm_glfw_user_count == 0 ) [[likely]] {
 		spdlog::info( "... terminating GLFW" );

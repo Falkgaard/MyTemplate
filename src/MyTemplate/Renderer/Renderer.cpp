@@ -588,12 +588,12 @@ Renderer::Renderer( Renderer &&other ) noexcept:
 	m_p_swapchain          { std::move( other.m_p_swapchain       ) },
 	m_p_pipeline           { std::move( other.m_p_pipeline        ) }
 {
-	spdlog::info( "Moving Renderer instance..." );
+	spdlog::info( "Moving a Renderer instance..." );
 }
 
 Renderer::~Renderer() noexcept
 {
-	spdlog::info( "Destroying Renderer instance..." );
+	spdlog::info( "Destroying a Renderer instance..." );
 }
 
 [[nodiscard]] Window const &

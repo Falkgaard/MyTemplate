@@ -209,12 +209,12 @@ Swapchain::Swapchain( Swapchain &&other ) noexcept:
 	m_images               ( std::move( other.m_images      ) ),
 	m_image_views          ( std::move( other.m_image_views ) )
 {
-	spdlog::info( "Moving Swapchain instance..." );
+	spdlog::info( "Moving a Swapchain instance..." );
 }
 
 Swapchain::~Swapchain() noexcept
 {
-	spdlog::info( "Destroying Swapchain instance..." );
+	spdlog::info( "Destroying a Swapchain instance..." );
 }
 
 [[nodiscard]] vk::Extent2D const &

@@ -96,7 +96,7 @@ namespace { // private (file-scope)
 		color_attachment_description {
 			.format         = swapchain.get_surface_format().format,
 			.samples        = vk::SampleCountFlagBits::e1, // no MSAA yet
-			.loadOp         = vk::AttachmentLoadOp::eLoad,
+			.loadOp         = vk::AttachmentLoadOp::eClear,
 			.storeOp        = vk::AttachmentStoreOp::eStore,
 			.stencilLoadOp  = vk::AttachmentLoadOp::eDontCare,  // no depth/stencil yet
 			.stencilStoreOp = vk::AttachmentStoreOp::eDontCare, // no depth/stencil yet
@@ -133,7 +133,7 @@ namespace { // private (file-scope)
 // TODO: take swapchain as second arg?
 Pipeline::Pipeline( vk::raii::Device const &logical_device, Swapchain const &swapchain )
 {
-	spdlog::info( "Constructing Pipeline instance..." );
+	spdlog::info( "Constructing a Pipeline instance..." );
 	
 	spdlog::info( "Creating shader modules..." );
 	m_p_vertex_shader_module = make_shader_module_from_file(
@@ -323,7 +323,7 @@ Pipeline::Pipeline( vk::raii::Device const &logical_device, Swapchain const &swa
 
 Pipeline::~Pipeline() noexcept
 {
-	spdlog::info( "Destroying Pipeline instance..." );
+	spdlog::info( "Destroying a Pipeline instance..." );
 } // end-of-function: Pipeline::Pipeline
 
 // EOF
