@@ -11,13 +11,10 @@
 // forward declarations:
 class Window;
 struct QueueFamilyIndices;
-namespace vk::raii {
-	class PhysicalDevice;
-} // end-of-namespace: vk::raii
 
 class Swapchain final {
 	public:
-		Swapchain( vk::raii::PhysicalDevice &, vk::raii::Device &, Window &, QueueFamilyIndices & );
+		Swapchain( vk::raii::PhysicalDevice const &, vk::raii::Device const &, Window const &, QueueFamilyIndices const & );
 		Swapchain(                    ) = delete;
 		Swapchain( Swapchain const &  ) = delete;
 		Swapchain( Swapchain       && ) noexcept;
@@ -32,7 +29,8 @@ class Swapchain final {
 		vk::Extent2D                      m_surface_extent       ;
 		vk::PresentModeKHR                m_present_mode         ;
 		u32                               m_framebuffer_count    ;
-		std::vector<vk::Image>            m_images               ;
+		vk::raii::SwapchainKHR            m_swapchain            ;
+		std::vector<VkImage>              m_images               ;
 		std::vector<vk::raii::ImageView>  m_image_views          ;
 };
 

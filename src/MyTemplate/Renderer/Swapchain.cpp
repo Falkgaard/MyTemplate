@@ -9,13 +9,13 @@
 namespace { // private (file-scope)
 	
 	[[nodiscard]] auto
-	select_surface_format( vk::raii::PhysicalDevice &physical_device, Window &window )
+	select_surface_format( vk::raii::PhysicalDevice const &physical_device, Window const &window )
 	{
 		spdlog::info( "Selecting swapchain surface format..." );
 		auto const available_surface_formats {
 			physical_device.getSurfaceFormatsKHR( *window.get_surface() ) // TODO: 2KHR?
 		};
-		for ( auto const &available_surface_format: available_surface_formats )
+		for ( auto const &available_surface_format: available_surface_formats ) {
 			if ( available_surface_format.format     == vk::Format::eB8G8R8A8Srgb               // TODO: refactor out
 			and  available_surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) [[unlikely]] { // ^ ditto
 				spdlog::info(
@@ -24,13 +24,14 @@ namespace { // private (file-scope)
 					to_string( available_surface_format.colorSpace )
 				);
 				return available_surface_format;
+			}
 		}
 		// TODO: add contingency decisions to fallback on
 		throw std::runtime_error { "Unable to find the desired surface format!" };	
 	} // end-of-function: select_surface_format
 	
 	[[nodiscard]] auto
-	select_surface_extent( Window &window, vk::SurfaceCapabilitiesKHR &surface_capabilities )
+	select_surface_extent( Window const &window, vk::SurfaceCapabilitiesKHR const &surface_capabilities )
 	{
 		spdlog::info( "Selecting swapchain surface extent..." );
 		vk::Extent2D result {};
@@ -133,11 +134,12 @@ namespace { // private (file-scope)
 } // end-of-unnamed-namespace
 
 Swapchain::Swapchain(
-	vk::raii::PhysicalDevice &physical_device,
-	vk::raii::Device         &logical_device,
-	Window                   &window,
-	QueueFamilyIndices       &queue_family_indices
-)
+	vk::raii::PhysicalDevice const &physical_device,
+	vk::raii::Device         const &logical_device,
+	Window                   const &window,
+	QueueFamilyIndices       const &queue_family_indices
+):
+	m_swapchain( nullptr )
 {
 	spdlog::info( "Constructing a Swapchain instance..." );
 	
@@ -153,44 +155,47 @@ Swapchain::Swapchain(
 		queue_family_indices.graphics
 	};
 	// TODO: check present support	
-	vk::SwapchainCreateInfoKHR const create_info {
-		.surface               = *window.get_surface(),
-		.minImageCount         =  m_framebuffer_count, // TODO: config refactor
-		.imageFormat           =  m_surface_format.format,       // TODO: config refactor
-		.imageColorSpace       =  m_surface_format.colorSpace,   // TODO: config refactor
-		.imageExtent           =  m_surface_extent,
-		.imageArrayLayers      =  1, // non-stereoscopic
-		.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // NOTE: change to eTransferDst if doing post-processing later
-		.imageSharingMode      =  queue_family_indices.are_separate ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
-		.queueFamilyIndexCount =  queue_family_indices.are_separate ?                           2u : 0u,
-		.pQueueFamilyIndices   =  queue_family_indices.are_separate ?   queue_family_indices_array : nullptr,
-		.preTransform          =  m_surface_capabilities.currentTransform,
-		.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
-		.presentMode           =  m_present_mode, // TODO: config refactor
-		.clipped               =  VK_TRUE,
-		.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later after implementing resizing
-	};
-	vk::raii::SwapchainKHR swapchain( logical_device, create_info );
+	m_swapchain = vk::raii::SwapchainKHR(
+		logical_device,
+		vk::SwapchainCreateInfoKHR {
+			.surface               = *window.get_surface(),
+			.minImageCount         =  m_framebuffer_count,         // TODO: config refactor
+			.imageFormat           =  m_surface_format.format,     // TODO: config refactor
+			.imageColorSpace       =  m_surface_format.colorSpace, // TODO: config refactor
+			.imageExtent           =  m_surface_extent,
+			.imageArrayLayers      =  1, // non-stereoscopic
+			.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // NOTE: change to eTransferDst if doing post-processing later
+			.imageSharingMode      =  queue_family_indices.are_separate ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
+			.queueFamilyIndexCount =  queue_family_indices.are_separate ?                           2u : 0u,
+			.pQueueFamilyIndices   =  queue_family_indices.are_separate ?   queue_family_indices_array : nullptr,
+			.preTransform          =  m_surface_capabilities.currentTransform,
+			.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
+			.presentMode           =  m_present_mode, // TODO: config refactor
+			.clipped               =  VK_TRUE,
+			.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later after implementing resizing
+		}
+	);
 	
 	// Image views:
 	spdlog::info( "Creating swapchain framebuffer image view(s)..." );
-	auto swapchain_images { swapchain.getImages() };
-	std::vector<vk::raii::ImageView> image_views;
-	image_views.reserve( std::size( swapchain_images ) );
-	vk::ImageViewCreateInfo image_view_create_info {
-		.viewType         = vk::ImageViewType::e2D,
-		.format           = m_surface_format.format, // TODO: verify
-		.subresourceRange = vk::ImageSubresourceRange {
-									.aspectMask     = vk::ImageAspectFlagBits::eColor,
-									.baseMipLevel   = 0u,
-									.levelCount     = 1u,
-									.baseArrayLayer = 0u,
-									.layerCount     = 1u
-								}
-	};
-	for ( auto const &image: swapchain_images ) {
-		image_view_create_info.image = static_cast<vk::Image>( image );
-		image_views.emplace_back( logical_device, image_view_create_info );
+	m_images = m_swapchain.getImages();
+	m_image_views.reserve( std::size( m_images ) );
+	for ( auto const &image: m_images ) {
+		m_image_views.emplace_back(
+			logical_device,
+			vk::ImageViewCreateInfo {
+				.image            = static_cast<vk::Image>( image ),
+				.viewType         = vk::ImageViewType::e2D,
+				.format           = m_surface_format.format, // TODO: verify
+				.subresourceRange = vk::ImageSubresourceRange {
+				                     .aspectMask     = vk::ImageAspectFlagBits::eColor,
+				                     .baseMipLevel   = 0u,
+				                     .levelCount     = 1u,
+				                     .baseArrayLayer = 0u,
+				                     .layerCount     = 1u
+				                  }
+			}
+		);
 	}
 }
 
@@ -200,6 +205,7 @@ Swapchain::Swapchain( Swapchain &&other ) noexcept:
 	m_surface_extent       ( other.m_surface_extent           ),
 	m_present_mode         ( other.m_present_mode             ),
 	m_framebuffer_count    ( other.m_framebuffer_count        ),
+	m_swapchain            ( std::move( other.m_swapchain   ) ),
 	m_images               ( std::move( other.m_images      ) ),
 	m_image_views          ( std::move( other.m_image_views ) )
 {
