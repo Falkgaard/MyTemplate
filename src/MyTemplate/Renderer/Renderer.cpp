@@ -347,13 +347,14 @@ namespace // private (file-scope)
 				vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
 			};
 			
-			vk::DebugUtilsMessengerCreateInfoEXT const create_info {
-				.messageSeverity =  severity_flags,
-				.messageType     =  type_flags,
-				.pfnUserCallback = &debug_callback
-			};
-			
-			return std::make_unique<vk::raii::DebugUtilsMessengerEXT>( vk_instance, create_info );
+			return std::make_unique<vk::raii::DebugUtilsMessengerEXT>(
+				vk_instance,
+				vk::DebugUtilsMessengerCreateInfoEXT {
+					.messageSeverity =  severity_flags,
+					.messageType     =  type_flags,
+					.pfnUserCallback = &debug_callback
+				}
+			);
 		} // end-of-function: make_debug_messenger
 	#endif
 	
@@ -443,16 +444,17 @@ namespace // private (file-scope)
 			);
 		}
 		
-		vk::DeviceCreateInfo const create_info {
-			.queueCreateInfoCount    = static_cast<u32>( queue_create_infos.size() ),
-			.pQueueCreateInfos       = queue_create_infos.data(),
-			.enabledLayerCount       = 0,       // no longer used; TODO: add conditionally to support older versions?
-			.ppEnabledLayerNames     = nullptr, // ^ ditto
-			.enabledExtensionCount   = static_cast<u32>( required_device_extensions.size() ),
-			.ppEnabledExtensionNames = required_device_extensions.data()
-		};
-		
-		return std::make_unique<vk::raii::Device>( physical_device, create_info );
+		return std::make_unique<vk::raii::Device>(
+			physical_device,
+			vk::DeviceCreateInfo {
+				.queueCreateInfoCount    = static_cast<u32>( queue_create_infos.size() ),
+				.pQueueCreateInfos       = queue_create_infos.data(),
+				.enabledLayerCount       = 0,       // no longer used; TODO: add conditionally to support older versions?
+				.ppEnabledLayerNames     = nullptr, // ^ ditto
+				.enabledExtensionCount   = static_cast<u32>( required_device_extensions.size() ),
+				.ppEnabledExtensionNames = required_device_extensions.data()
+			}
+		);
 	} // end-of-function: make_logical_device
 	
 	[[nodiscard]] auto
@@ -469,12 +471,14 @@ namespace // private (file-scope)
 	make_command_pool( vk::raii::Device &logical_device, u32 const graphics_queue_family_index )
 	{
 		spdlog::info( "Creating command buffer pool..." );
-		vk::CommandPoolCreateInfo const create_info {
-			// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
-			//       Also, one pool would be needed for each queue family (if ever extended).
-			.queueFamilyIndex = graphics_queue_family_index
-		};
-		return std::make_unique<vk::raii::CommandPool>( logical_device, create_info );
+		return std::make_unique<vk::raii::CommandPool>(
+			logical_device,
+			vk::CommandPoolCreateInfo {
+				// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
+				//       Also, one pool would be needed for each queue family (if ever extended).
+				.queueFamilyIndex = graphics_queue_family_index
+			}
+		);
 	} // end-of-function: make_command_pool
 	
 	[[nodiscard]] auto
@@ -486,12 +490,14 @@ namespace // private (file-scope)
 	)
 	{
 		spdlog::info( "Creating {} command buffer(s)...", command_buffer_count );
-			vk::CommandBufferAllocateInfo const allocate_info {
-			.commandPool        = *command_pool,
-			.level              =  level,
-			.commandBufferCount =  command_buffer_count
-		};
-		return std::make_unique<vk::raii::CommandBuffers>( logical_device, allocate_info );
+		return std::make_unique<vk::raii::CommandBuffers>(
+			logical_device,
+			vk::CommandBufferAllocateInfo {
+				.commandPool        = *command_pool,
+				.level              =  level,
+				.commandBufferCount =  command_buffer_count
+			}
+		);
 	} // end-of-function: make_command_buffers
 	
 	[[nodiscard]] auto
