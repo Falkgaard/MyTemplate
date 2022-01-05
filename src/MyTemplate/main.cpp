@@ -49,7 +49,7 @@ main()
 	}
 	
 	try {
-		Renderer renderer {};
+		gfx::Renderer renderer {};
 		
 #if 0
 		auto const find_memory_type_index {
