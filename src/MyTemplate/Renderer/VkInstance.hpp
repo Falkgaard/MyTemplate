@@ -7,6 +7,7 @@
 // forward declarations:
 class GlfwInstance;
 namespace vk::raii {
+	class Context;
 	class Instance;
 }; // end-of-namespace: vk::raii
 
@@ -19,6 +20,7 @@ class VkInstance {
 		VkInstance & operator=( VkInstance const  & ) = delete;
 		VkInstance & operator=( VkInstance       && ) noexcept;
 	private:
+		std::unique_ptr<vk::raii::Context>  m_p_context;
 		std::unique_ptr<vk::raii::Instance> m_p_instance;
 }; // end-of-class: VkInstance
 
