@@ -241,20 +241,18 @@ namespace gfx {
 					physical_device.getSurfaceSupportKHR( index, *window.get_surface() ) == VK_TRUE
 				};
 				
+				spdlog::info( "    Evaluating queue family index {}...", index );
+				spdlog::info( "    ... present  support: {}", supports_present  ? "OK!" : "missing!" );
+				spdlog::info( "    ... graphics support: {}", supports_graphics ? "OK!" : "missing!" );
 				if ( supports_graphics and supports_present ) {
-					spdlog::info( "... found queue family that supports both graphics and present!" );
 					maybe_present_index  = index;
 					maybe_graphics_index = index;
 					break;
 				}
-				else if ( supports_graphics ) {
-					spdlog::info( "... found queue family that supports graphics!" );
+				else if ( supports_graphics )
 					maybe_graphics_index = index;
-				}
-				else if ( supports_present ) {
-					spdlog::info( "... found queue family that supports present!" );
+				else if ( supports_present )
 					maybe_present_index = index;
-				}
 			}
 			if ( maybe_present_index.has_value() and maybe_graphics_index.has_value() ) [[likely]] {
 				bool const are_separate {
@@ -262,6 +260,8 @@ namespace gfx {
 				};
 				if ( are_separate ) [[unlikely]]
 					spdlog::info( "... selected different queue families for graphics and present." );
+				else
+					spdlog::info( "... ideal queue family was found!" );
 				return QueueFamilyIndices {
 					.present      = maybe_present_index.value(),
 					.graphics     = maybe_graphics_index.value(),
@@ -365,16 +365,6 @@ namespace gfx {
 			);
 		} // end-of-function: gfx::make_command_buffers
 		
-		[[nodiscard]] auto
-		make_pipeline(
-			vk::raii::Device const &logical_device,
-			Swapchain        const &swapchain
-		)
-		{
-			spdlog::info( "Creating pipeline..." );
-			return std::make_unique<Pipeline>( logical_device, swapchain );
-		} // end-of-function: gfx::make_pipeline
-		
 	} // end-of-unnamed-namespace
 	
 	Renderer::Renderer()
@@ -383,9 +373,10 @@ namespace gfx {
 		m_p_glfw_instance      = std::make_unique<GlfwInstance>();
 		m_p_vk_instance        = std::make_unique<VkInstance>( *m_p_glfw_instance );
 		#if !defined( NDEBUG )
-		//	m_p_debug_messenger = std::make_unique<DebugMessenger>( *m_p_vk_instance );
+		//	m_p_debug_messenger = std::make_unique<DebugMessenger>( *m_p_vk_instance ); // TODO: make into its own class
 		#endif
 		m_p_window             = std::make_unique<Window>( *m_p_glfw_instance, *m_p_vk_instance );
+		
 		m_p_physical_device    = select_physical_device( *m_p_vk_instance );
 		m_queue_family_indices = select_queue_family_indices( *m_p_physical_device, *m_p_window );
 		m_p_logical_device     = make_logical_device( *m_p_physical_device, m_queue_family_indices );
@@ -393,45 +384,46 @@ namespace gfx {
 		m_p_present_queue      = make_queue( *m_p_logical_device, m_queue_family_indices.present,  0 ); // only use 1 queue
 		m_p_command_pool       = make_command_pool( *m_p_logical_device, m_queue_family_indices.graphics );
 		m_p_command_buffers    = make_command_buffers( *m_p_logical_device, *m_p_command_pool, vk::CommandBufferLevel::ePrimary, 1 );
+		
 		m_p_swapchain          = std::make_unique<Swapchain>( *m_p_physical_device, *m_p_logical_device, *m_p_window, m_queue_family_indices ); // TODO: refactor params
-		m_p_pipeline           = make_pipeline( *m_p_logical_device, *m_p_swapchain );
-	}
+		m_p_pipeline           = std::make_unique<Pipeline>( *m_p_logical_device, *m_p_swapchain );
+	} // end-of-function: gfx::Renderer::Renderer
 	
 	Renderer::Renderer( Renderer &&other ) noexcept:
-		m_p_glfw_instance      { std::move( other.m_p_glfw_instance   ) },
-		m_p_vk_instance        { std::move( other.m_p_vk_instance     ) },
+		m_p_glfw_instance      { std::move( other.m_p_glfw_instance      ) },
+		m_p_vk_instance        { std::move( other.m_p_vk_instance        ) },
 		#if !defined( NDEBUG )
-		m_p_debug_messenger    { std::move( other.m_p_debug_messenger ) },
+		m_p_debug_messenger    { std::move( other.m_p_debug_messenger    ) },
 		#endif
-		m_p_window             { std::move( other.m_p_window          ) },
-		m_p_physical_device    { std::move( other.m_p_physical_device ) },
-		m_queue_family_indices { other.m_queue_family_indices           },
-		m_p_logical_device     { std::move( other.m_p_logical_device  ) },
-		m_p_graphics_queue     { std::move( other.m_p_graphics_queue  ) },
-		m_p_present_queue      { std::move( other.m_p_present_queue   ) },
-		m_p_command_pool       { std::move( other.m_p_command_pool    ) },
-		m_p_command_buffers    { std::move( other.m_p_command_buffers ) },
-		m_p_swapchain          { std::move( other.m_p_swapchain       ) },
-		m_p_pipeline           { std::move( other.m_p_pipeline        ) }
+		m_p_window             { std::move( other.m_p_window             ) },
+		m_p_physical_device    { std::move( other.m_p_physical_device    ) },
+		m_queue_family_indices { std::move( other.m_queue_family_indices ) },
+		m_p_logical_device     { std::move( other.m_p_logical_device     ) },
+		m_p_graphics_queue     { std::move( other.m_p_graphics_queue     ) },
+		m_p_present_queue      { std::move( other.m_p_present_queue      ) },
+		m_p_command_pool       { std::move( other.m_p_command_pool       ) },
+		m_p_command_buffers    { std::move( other.m_p_command_buffers    ) },
+		m_p_swapchain          { std::move( other.m_p_swapchain          ) },
+		m_p_pipeline           { std::move( other.m_p_pipeline           ) }
 	{
 		spdlog::info( "Moving a Renderer instance..." );
-	}
+	} // end-of-function: gfx::Renderer::Renderer
 	
 	Renderer::~Renderer() noexcept
 	{
 		spdlog::info( "Destroying a Renderer instance..." );
-	}
+	} // end-of-function: gfx::Renderer::~Renderer
 	
 	[[nodiscard]] Window const &
 	Renderer::get_window() const
 	{
 		return *m_p_window;
-	}
+	} // end-of-function: gfx::Renderer::get_window
 	
 	[[nodiscard]] Window &
 	Renderer::get_window()
 	{
 		return *m_p_window;
-	}
-} // end-of-namespace: gfx	
+	} // end-of-function: gfx::Renderer::get_window
+} // end-of-namespace: gfx
 // EOF

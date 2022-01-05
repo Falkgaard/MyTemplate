@@ -1,6 +1,6 @@
 #include "MyTemplate/Renderer/Pipeline.hpp"
+
 #include "MyTemplate/Renderer/Swapchain.hpp"
-#include "MyTemplate/Common/aliases.hpp"
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 #include <spdlog/spdlog.h>
@@ -38,7 +38,7 @@ namespace gfx {
 				spdlog::warn( "... failure!" );
 				throw std::runtime_error { "Failed to load binary file!" };
 			}
-		} // end-of-function: load_binary_from_file
+		} // end-of-function: gfx::<FILE>::load_binary_from_file
 					
 		[[nodiscard]] auto
 		make_shader_module_from_binary(
@@ -54,7 +54,7 @@ namespace gfx {
 					.pCode    = reinterpret_cast<u32 const *>( shader_binary.data() ) /// TODO: UB or US?
 				}	
 			);
-		} // end-of-function: make_shader_module_from_file
+		} // end-of-function: gfx::<FILE>::make_shader_module_from_file
 		
 		[[nodiscard]] auto
 		make_shader_module_from_file(
@@ -67,7 +67,7 @@ namespace gfx {
 				logical_device,
 				load_binary_from_file( shader_spirv_bytecode_filename )
 			);
-		} // end-of-function: make_shader_module_from_file
+		} // end-of-function: gfx::<FILE>::make_shader_module_from_file
 		
 		[[nodiscard]] auto
 		make_pipeline_layout(
@@ -84,7 +84,7 @@ namespace gfx {
 					.pPushConstantRanges    = nullptr  // TODO: explain
 				}
 			);
-		} // end-of-function: make_pipeline_layout
+		} // end-of-function: gfx::<FILE>::make_pipeline_layout
 		
 		[[nodiscard]] auto
 		make_render_pass(
@@ -127,7 +127,7 @@ namespace gfx {
 					.pSubpasses      = &color_subpass_description
 				}
 			);
-		} // end-of-function: make_render_pass
+		} // end-of-function: gfx::<FILE>::make_render_pass
 	
 	} // end-of-unnamed-namespace
 	
@@ -320,7 +320,7 @@ namespace gfx {
 				.basePipelineIndex   =   -1,
 			}
 		);
-	} // end-of-function: Pipeline::Pipeline
+	} // end-of-function: gfx::Pipeline::Pipeline
 	
 	Pipeline::Pipeline( Pipeline &&other ) noexcept:
 		m_p_vertex_shader_module   { std::move( other.m_p_vertex_shader_module   ) },
@@ -330,12 +330,12 @@ namespace gfx {
 		m_p_graphics_pipeline      { std::move( other.m_p_graphics_pipeline      ) }
 	{
 		spdlog::info( "Move constructing a Pipeline instance..." );
-	} // end-of-function: Pipeline::Pipeline
+	} // end-of-function: gfx::Pipeline::Pipeline
 	
 	Pipeline::~Pipeline() noexcept
 	{
 		spdlog::info( "Destroying a Pipeline instance..." );
-	} // end-of-function: Pipeline::~Pipeline
+	} // end-of-function: gfx::Pipeline::~Pipeline
 	
 	Pipeline &
 	Pipeline::operator=( Pipeline &&other ) noexcept
@@ -347,6 +347,6 @@ namespace gfx {
 		m_p_render_pass            = std::move( other.m_p_render_pass            );
 		m_p_graphics_pipeline      = std::move( other.m_p_graphics_pipeline      );
 		return *this;
-	} // end-of-function: Pipeline::operator=
+	} // end-of-function: gfx::Pipeline::operator=
 } // end-of-namespace: gfx
 // EOF
