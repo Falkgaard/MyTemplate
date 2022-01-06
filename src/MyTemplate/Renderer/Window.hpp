@@ -20,6 +20,7 @@ namespace gfx {
 			[[nodiscard]] vk::raii::SurfaceKHR       & get_surface()         ;
 			[[nodiscard]] bool                         was_closed()     const;
 			void                                       update()              ;
+			void                                       wait_for_resize()     ;
 		private:
 			GLFWwindow                            *m_p_window;
 			std::unique_ptr<vk::raii::SurfaceKHR>  m_p_surface;

@@ -17,9 +17,30 @@
 #include <array>
 #include <vector>
 
-namespace gfx {
+namespace gfx {	
+	struct Renderer::State final {
+		// NOTE: declaration order here is very important!
+		std::unique_ptr<GlfwInstance>                         p_glfw_instance        ;
+		std::unique_ptr<VkInstance>                           p_vk_instance          ;
+		#if !defined( NDEBUG )
+			std::unique_ptr<vk::raii::DebugUtilsMessengerEXT>  p_debug_messenger      ; // TODO: refactor into own class?
+		#endif
+		std::unique_ptr<Window>                               p_window               ;
+		std::unique_ptr<vk::raii::PhysicalDevice>             p_physical_device      ; // TODO: refactor into LogicalDevice
+		QueueFamilyIndices                                    queue_family_indices   ; // TODO: refactor into LogicalDevice
+		std::unique_ptr<vk::raii::Device>                     p_logical_device       ; // TODO: refactor into own class
+		std::unique_ptr<vk::raii::Queue>                      p_graphics_queue       ;
+		std::unique_ptr<vk::raii::Queue>                      p_present_queue        ;
+		std::unique_ptr<vk::raii::CommandPool>                p_command_pool         ;
+		// recreating part follows:
+		std::unique_ptr<Swapchain>                            p_swapchain            ;
+		std::unique_ptr<vk::raii::CommandBuffers>             p_command_buffers      ; // NOTE: Must be deleted before command pool!
+		std::unique_ptr<Pipeline>                             p_pipeline             ;
+		std::unique_ptr<Framebuffers>                         p_framebuffers         ; // NOTE: Must be deleted before swapchain!
+		bool                                                  should_remake_swapchain;
+	}; // end-of-struct: gfx::Renderer::State	
+	
 	namespace { // private (file-scope)
-		
 		// TODO: refactor out
 		std::array constexpr required_device_extensions {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -349,104 +370,143 @@ namespace gfx {
 		
 		[[nodiscard]] auto
 		make_command_buffers(
-			vk::raii::Device       const &logical_device,
-			vk::raii::CommandPool  const &command_pool,
+			Renderer::State        const &state,
 			vk::CommandBufferLevel const  level,
 			u32                    const  command_buffer_count
 		)
 		{
 			spdlog::info( "Creating {} command buffer(s)...", command_buffer_count );
 			return std::make_unique<vk::raii::CommandBuffers>(
-				logical_device,
+				*state.p_logical_device,
 				vk::CommandBufferAllocateInfo {
-					.commandPool        = *command_pool,
-					.level              =  level,
-					.commandBufferCount =  command_buffer_count
+					.commandPool        = **state.p_command_pool,
+					.level              =   level,
+					.commandBufferCount =   command_buffer_count
 				}
 			);
 		} // end-of-function: gfx::<unnamed>::make_command_buffers
 		
 		void
-		recreate_swapchain(
-			std::unique_ptr<Swapchain>     &p_swapchain,
-			vk::raii::PhysicalDevice const &physical_device,
-			vk::raii::Device         const &logical_device,
-			Window                   const &window,
-			QueueFamilyIndices       const &queue_family_indices
-		)
+		make_swapchain( Renderer::State &state )
 		{
-			spdlog::debug( "Remaking swapchain!" );
-			p_swapchain.reset( nullptr );
-			std::make_unique<Swapchain>(
-				physical_device, logical_device, window, queue_family_indices
-			);	
+			spdlog::debug( "Creating swapchain and necessary state!" );
+			
+			state.p_window->wait_for_resize();
+			state.p_logical_device->waitIdle();
+			
+			// delete previous state (if any) in the right order:
+			if ( state.p_framebuffers ) {
+				state.p_framebuffers.reset();
+			}
+			if ( state.p_command_buffers ) {
+				state.p_command_buffers->clear();
+				state.p_command_buffers.reset();
+			}
+			if ( state.p_pipeline ) {
+				state.p_pipeline.reset();
+			}
+			if ( state.p_swapchain ) {
+				state.p_swapchain.reset();
+			}
+			
+			state.p_swapchain = std::make_unique<Swapchain>(
+				*state.p_physical_device,
+				*state.p_logical_device,
+				*state.p_window,
+				 state.queue_family_indices
+			);
+			
+			state.p_pipeline = std::make_unique<Pipeline>(
+				*state.p_logical_device,
+				*state.p_swapchain
+			);
+			
+			state.p_framebuffers = std::make_unique<Framebuffers>(
+				*state.p_logical_device,
+				*state.p_swapchain,
+				*state.p_pipeline
+			);
+			
+			state.p_command_buffers = make_command_buffers(
+				state,
+				vk::CommandBufferLevel::ePrimary,
+				state.p_swapchain->get_image_views().size() // one per framebuffer frame
+			);
+			
+			// TODO: refactor
+			vk::ClearValue const clear_value {
+				.color = {{{ 0.02f, 0.02f, 0.02f, 1.0f }}}
+			};
+			
+			for ( u32 index{0}; index < state.p_swapchain->get_image_views().size(); ++index ) {
+				auto &command_buffer = (*state.p_command_buffers)[index];
+				command_buffer.begin( {} );
+				command_buffer.beginRenderPass(
+					vk::RenderPassBeginInfo {
+						.renderPass      = *( state.p_pipeline->get_render_pass()   ),
+						.framebuffer     = *( state.p_framebuffers->access()[index] ),
+						.renderArea      = vk::Rect2D {
+						                    .extent = state.p_swapchain->get_surface_extent(),
+						                 },
+						.clearValueCount =  1, // TODO: explain
+						.pClearValues    = &clear_value
+					},
+					vk::SubpassContents::eInline
+				);
+				command_buffer.bindPipeline(
+					vk::PipelineBindPoint::eGraphics,
+					*( state.p_pipeline->access() )
+				);
+				//command_buffer.bindDescriptorSets()
+				//command_buffer.setViewport()
+				//command_buffer.setScissor()
+				command_buffer.draw(
+					3, // vertex count
+					1, // instance count
+					0, // first vertex
+					0  // first instance
+				);
+				command_buffer.endRenderPass();
+				command_buffer.end();
+			}
 		} // end-of-function: gfx::<unnamed>::recreate_swapchain
 	} // end-of-unnamed-namespace
 	
 	Renderer::Renderer()
 	{
+		// INIT:
+		//		Context
+		//		Instances
+		//		Window
+		//		PhysicalDevice
+		//		QueueFamilyIndices
+		//		LogicalDevice
+		//		Queues
+		//		CommandBufferPool
+		//	RECREATE:
+		//		Swapchain
+		//		ImageViews
+		//		RenderPass
+		//		GraphicsPipeline
+		//		CommandBuffers
 		spdlog::info( "Constructing a Renderer instance..." );
-		m_should_remake_swapchain = false;
-		m_p_glfw_instance         = std::make_unique<GlfwInstance>();
-		m_p_vk_instance           = std::make_unique<VkInstance>( *m_p_glfw_instance );
+		m_p_state = std::make_unique<Renderer::State>();
+		m_p_state->should_remake_swapchain = false;
+		m_p_state->p_glfw_instance         = std::make_unique<GlfwInstance>();
+		m_p_state->p_vk_instance           = std::make_unique<VkInstance>( *m_p_state->p_glfw_instance );
 		#if !defined( NDEBUG )
 		//	m_p_debug_messenger    = std::make_unique<DebugMessenger>( *m_p_vk_instance ); // TODO: make into its own class
 		#endif
-		m_p_window                = std::make_unique<Window>( *m_p_glfw_instance, *m_p_vk_instance, m_should_remake_swapchain );
+		m_p_state->p_window                = std::make_unique<Window>( *m_p_state->p_glfw_instance, *m_p_state->p_vk_instance, m_p_state->should_remake_swapchain );
 // TODO: refactor block below   
-		m_p_physical_device       = select_physical_device( *m_p_vk_instance );
-		m_queue_family_indices    = select_queue_family_indices( *m_p_physical_device, *m_p_window );
-		m_p_logical_device        = make_logical_device( *m_p_physical_device, m_queue_family_indices );
-		m_p_graphics_queue        = make_queue( *m_p_logical_device, m_queue_family_indices.graphics, 0 ); // NOTE: 0 since we
-		m_p_present_queue         = make_queue( *m_p_logical_device, m_queue_family_indices.present,  0 ); // only use 1 queue
-// TODO: refactor block above   
-		m_p_swapchain             = std::make_unique<Swapchain>( *m_p_physical_device, *m_p_logical_device, *m_p_window, m_queue_family_indices ); // TODO: refactor params
-		m_p_pipeline              = std::make_unique<Pipeline>( *m_p_logical_device, *m_p_swapchain );
-		m_p_framebuffers          = std::make_unique<Framebuffers>( *m_p_logical_device, *m_p_swapchain, *m_p_pipeline );
-// TODO: refactor block below
-		m_p_command_pool          = make_command_pool( *m_p_logical_device, m_queue_family_indices.graphics );
-		m_p_command_buffers       = make_command_buffers(
-			*m_p_logical_device,
-			*m_p_command_pool,
-			 vk::CommandBufferLevel::ePrimary,
-			 m_p_swapchain->get_image_views().size() // one per framebuffer frame
-		);
-		
-		vk::ClearValue const clear_value {
-			.color = {{{ 0.02f, 0.02f, 0.02f, 1.0f }}}
-		};
-		
-		for ( u32 index{0}; index < m_p_swapchain->get_image_views().size(); ++index ) {
-			auto &command_buffer = (*m_p_command_buffers)[index];
-			command_buffer.begin( {} );
-			command_buffer.beginRenderPass(
-				vk::RenderPassBeginInfo {
-					.renderPass      = *( m_p_pipeline->get_render_pass()   ),
-					.framebuffer     = *( m_p_framebuffers->access()[index] ),
-					.renderArea      =  vk::Rect2D {
-												 .extent = m_p_swapchain->get_surface_extent(),
-										  },
-					.clearValueCount =  1, // TODO: explain
-					.pClearValues    = &clear_value
-				},
-				vk::SubpassContents::eInline
-			);
-			command_buffer.bindPipeline(
-				vk::PipelineBindPoint::eGraphics,
-				*( m_p_pipeline->access() )
-			);
-			//command_buffer.bindDescriptorSets()
-			//command_buffer.setViewport()
-			//command_buffer.setScissor()
-			command_buffer.draw(
-				3, // vertex count
-				1, // instance count
-				0, // first vertex
-				0  // first instance
-			);
-			command_buffer.endRenderPass();
-			command_buffer.end();
-		}
+		m_p_state->p_physical_device       = select_physical_device( *m_p_state->p_vk_instance );
+		m_p_state->queue_family_indices    = select_queue_family_indices( *m_p_state->p_physical_device, *m_p_state->p_window );
+		m_p_state->p_logical_device        = make_logical_device( *m_p_state->p_physical_device, m_p_state->queue_family_indices );
+		m_p_state->p_graphics_queue        = make_queue( *m_p_state->p_logical_device, m_p_state->queue_family_indices.graphics, 0 ); // NOTE: 0 since we
+		m_p_state->p_present_queue         = make_queue( *m_p_state->p_logical_device, m_p_state->queue_family_indices.present,  0 ); // only use 1 queue
+		m_p_state->p_command_pool          = make_command_pool( *m_p_state->p_logical_device, m_p_state->queue_family_indices.graphics );
+		make_swapchain( *m_p_state );
+
 
 #if 0 // TODO:
 	// initialize a vk::RenderPassBeginInfo with the current imageIndex and some appropriate renderArea and clearValues
@@ -478,22 +538,7 @@ namespace gfx {
 	} // end-of-function: gfx::Renderer::Renderer
 	
 	Renderer::Renderer( Renderer &&other ) noexcept:
-		m_p_glfw_instance      { std::move( other.m_p_glfw_instance      ) },
-		m_p_vk_instance        { std::move( other.m_p_vk_instance        ) },
-		#if !defined( NDEBUG )
-		m_p_debug_messenger    { std::move( other.m_p_debug_messenger    ) },
-		#endif
-		m_p_window             { std::move( other.m_p_window             ) },
-		m_p_physical_device    { std::move( other.m_p_physical_device    ) },
-		m_queue_family_indices { std::move( other.m_queue_family_indices ) },
-		m_p_logical_device     { std::move( other.m_p_logical_device     ) },
-		m_p_graphics_queue     { std::move( other.m_p_graphics_queue     ) },
-		m_p_present_queue      { std::move( other.m_p_present_queue      ) },
-		m_p_command_pool       { std::move( other.m_p_command_pool       ) },
-		m_p_command_buffers    { std::move( other.m_p_command_buffers    ) },
-		m_p_framebuffers       { std::move( other.m_p_framebuffers       ) },
-		m_p_swapchain          { std::move( other.m_p_swapchain          ) },
-		m_p_pipeline           { std::move( other.m_p_pipeline           ) }
+		m_p_state      { std::move( other.m_p_state ) }
 	{
 		spdlog::info( "Moving a Renderer instance..." );
 	} // end-of-function: gfx::Renderer::Renderer
@@ -501,112 +546,104 @@ namespace gfx {
 	Renderer::~Renderer() noexcept
 	{
 		spdlog::info( "Destroying a Renderer instance..." );
+		if ( m_p_state and m_p_state->p_command_buffers )
+			m_p_state->p_command_buffers->clear();
 	} // end-of-function: gfx::Renderer::~Renderer
 	
 	[[nodiscard]] Window const &
 	Renderer::get_window() const
 	{
-		return *m_p_window;
+		return *m_p_state->p_window;
 	} // end-of-function: gfx::Renderer::get_window
 	
 	[[nodiscard]] Window &
 	Renderer::get_window()
 	{
-		return *m_p_window;
+		return *m_p_state->p_window;
 	} // end-of-function: gfx::Renderer::get_window
 	
 	void
 	Renderer::operator()()
 	{
-		#define TIMEOUT 5000 // TODO!
+		#define TIMEOUT 5000 // TEMP! TODO
 		
 		vk::raii::Semaphore const image_acquired_semaphore(
-			*m_p_logical_device,
+			*m_p_state->p_logical_device,
 			vk::SemaphoreCreateInfo{}
 		);
 		
-		auto const [acquire_result, image_index] {
-			m_p_swapchain->access().acquireNextImage(
-				TIMEOUT,
-				*image_acquired_semaphore
-			)
-		};
-		
-		switch ( acquire_result ) {
-			case vk::Result::eTimeout           : throw "TODO"; break; // TODO
-			case vk::Result::eNotReady          : throw "TODO"; break; // TODO
-			case vk::Result::eSuboptimalKHR     : [[fallthrough]];
-			case vk::Result::eErrorOutOfDateKHR : {
-				m_should_remake_swapchain = false;
-				recreate_swapchain(
-					m_p_swapchain,
-					*m_p_physical_device,
-					*m_p_logical_device,
-					*m_p_window,
-					m_queue_family_indices
-				);
-				return;
-			}
-			default: break; // do nothing
+		u32        acquired_index;
+		vk::Result acquired_result;
+		try {
+			auto const [result, index] {
+				m_p_state->p_swapchain->access().acquireNextImage(
+					TIMEOUT,
+					*image_acquired_semaphore
+				)
+			};
+			acquired_index  = index;
+			acquired_result = result;
 		}
+		catch( vk::OutOfDateKHRError const &e ) {}
+      // vk::Result::eSuccess
+      // vk::Result::eTimeout
+      // vk::Result::eNotReady
+      // vk::Result::eSuboptimalKHR
 		
-		vk::raii::Fence const fence( *m_p_logical_device, vk::FenceCreateInfo{} );
+		if ( acquired_result == vk::Result::eSuboptimalKHR
+		or   acquired_result == vk::Result::eErrorOutOfDateKHR ) {
+			make_swapchain( *m_p_state );
+			return;
+		}
+		else if ( acquired_result != vk::Result::eSuccess)
+			throw std::runtime_error { "Failed to acquire swapchain image!" };
+		
+		vk::raii::Fence const fence( *m_p_state->p_logical_device, vk::FenceCreateInfo{} );
 		
 		vk::PipelineStageFlags const wait_destination_stage_mask(
 			vk::PipelineStageFlagBits::eColorAttachmentOutput
 		);
 		
-		m_p_graphics_queue->submit(
+		m_p_state->p_graphics_queue->submit(
 			vk::SubmitInfo {
 				.pWaitDstStageMask  = &wait_destination_stage_mask,
 				.commandBufferCount =  1,
-				.pCommandBuffers    = &*(*m_p_command_buffers)[image_index],
+				.pCommandBuffers    = &*(*m_p_state->p_command_buffers)[acquired_index],
 				.pSignalSemaphores  = &*image_acquired_semaphore
 			},
 			*fence
 		);
 		
-		while ( m_p_logical_device->waitForFences( { *fence }, VK_TRUE, TIMEOUT ) == vk::Result::eTimeout );
+		while (
+			m_p_state->p_logical_device->waitForFences(
+				{ *fence },
+				VK_TRUE,
+				TIMEOUT
+			) == vk::Result::eTimeout
+		);
 		
-		auto const present_result {
-			m_p_present_queue->presentKHR(
+		vk::Result present_result;
+		try {
+			present_result = m_p_state->p_present_queue->presentKHR(
 				vk::PresentInfoKHR {
 					.waitSemaphoreCount = 0,
 					.pWaitSemaphores    = nullptr, // TODO: comment
 					.swapchainCount     = 1,
-					.pSwapchains        = &*(m_p_swapchain->access()),
-					.pImageIndices      = &image_index,
+					.pSwapchains        = &*(m_p_state->p_swapchain->access()),
+					.pImageIndices      = &acquired_index,
 				}
-			)
-		};
-		
-		switch ( present_result ) {
-			case vk::Result::eErrorOutOfDateKHR : [[fallthrough]];
-			case vk::Result::eSuboptimalKHR     : {
-				m_should_remake_swapchain = false;
-				recreate_swapchain(
-					m_p_swapchain,
-					*m_p_physical_device,
-					*m_p_logical_device,
-					*m_p_window,
-					m_queue_family_indices
-				);
-				break;
-			}
-			case vk::Result::eSuccess : break;
-			default: throw "TODO";
-		}
-
-		if ( m_should_remake_swapchain ) {
-			m_should_remake_swapchain = false;
-			recreate_swapchain(
-				m_p_swapchain,
-				*m_p_physical_device,
-				*m_p_logical_device,
-				*m_p_window,
-				m_queue_family_indices
 			);
 		}
+		catch ( vk::OutOfDateKHRError const &e) {}
+		
+		if ( m_p_state->should_remake_swapchain
+		or   present_result==vk::Result::eSuboptimalKHR
+		or   present_result==vk::Result::eErrorOutOfDateKHR ) {
+			m_p_state->should_remake_swapchain = false;
+			make_swapchain( *m_p_state );
+		}
+		else if ( present_result != vk::Result::eSuccess )
+			throw std::runtime_error { "Failed to present swapchain image!" };
 	} // end-of-function: gfx::Renderer::operator()
 } // end-of-namespace: gfx
 // EOF

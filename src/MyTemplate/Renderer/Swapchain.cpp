@@ -215,6 +215,8 @@ namespace gfx {
 	Swapchain::~Swapchain() noexcept
 	{
 		spdlog::info( "Destroying a Swapchain instance..." );
+		m_image_views.clear();
+		m_images.clear();
 	}
 	
 	[[nodiscard]] vk::Extent2D const &

@@ -102,6 +102,18 @@ namespace gfx {
 	}
 	
 	void
+	Window::wait_for_resize()
+	{
+		i32 width  { 0 };
+		i32 height { 0 };
+		glfwGetFramebufferSize( m_p_window, &width, &height );
+		while ( width == 0 or height == 0 ) {
+		    glfwGetFramebufferSize( m_p_window, &width, &height );
+		    glfwWaitEvents();
+		}
+	} // end-of-function: gfx::Window::wait_for_resize
+	
+	void
 	Window::on_resize_callback( GLFWwindow *p_window, [[maybe_unused]] int width, [[maybe_unused]] int height )
 	{
 		*(static_cast<Window*>( glfwGetWindowUserPointer(p_window) )->m_p_set_on_resize) = true;
