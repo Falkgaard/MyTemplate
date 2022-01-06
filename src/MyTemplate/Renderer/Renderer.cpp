@@ -405,9 +405,9 @@ namespace gfx {
 		m_p_present_queue      { std::move( other.m_p_present_queue      ) },
 		m_p_command_pool       { std::move( other.m_p_command_pool       ) },
 		m_p_command_buffers    { std::move( other.m_p_command_buffers    ) },
+		m_p_framebuffers       { std::move( other.m_p_framebuffers       ) },
 		m_p_swapchain          { std::move( other.m_p_swapchain          ) },
-		m_p_pipeline           { std::move( other.m_p_pipeline           ) },
-		m_p_framebuffers       { std::move( other.m_p_framebuffers       ) }
+		m_p_pipeline           { std::move( other.m_p_pipeline           ) }
 	{
 		spdlog::info( "Moving a Renderer instance..." );
 	} // end-of-function: gfx::Renderer::Renderer
