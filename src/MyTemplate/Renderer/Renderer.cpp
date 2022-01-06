@@ -377,18 +377,88 @@ namespace gfx {
 		//	m_p_debug_messenger = std::make_unique<DebugMessenger>( *m_p_vk_instance ); // TODO: make into its own class
 		#endif
 		m_p_window             = std::make_unique<Window>( *m_p_glfw_instance, *m_p_vk_instance );
-		
+// TODO: refactor block below
 		m_p_physical_device    = select_physical_device( *m_p_vk_instance );
 		m_queue_family_indices = select_queue_family_indices( *m_p_physical_device, *m_p_window );
 		m_p_logical_device     = make_logical_device( *m_p_physical_device, m_queue_family_indices );
 		m_p_graphics_queue     = make_queue( *m_p_logical_device, m_queue_family_indices.graphics, 0 ); // NOTE: 0 since we
 		m_p_present_queue      = make_queue( *m_p_logical_device, m_queue_family_indices.present,  0 ); // only use 1 queue
-		m_p_command_pool       = make_command_pool( *m_p_logical_device, m_queue_family_indices.graphics );
-		m_p_command_buffers    = make_command_buffers( *m_p_logical_device, *m_p_command_pool, vk::CommandBufferLevel::ePrimary, 1 );
-		
+// TODO: refactor block above
 		m_p_swapchain          = std::make_unique<Swapchain>( *m_p_physical_device, *m_p_logical_device, *m_p_window, m_queue_family_indices ); // TODO: refactor params
 		m_p_pipeline           = std::make_unique<Pipeline>( *m_p_logical_device, *m_p_swapchain );
 		m_p_framebuffers       = std::make_unique<Framebuffers>( *m_p_logical_device, *m_p_swapchain, *m_p_pipeline );
+// TODO: refactor block below:
+		m_p_command_pool       = make_command_pool( *m_p_logical_device, m_queue_family_indices.graphics );
+		m_p_command_buffers    = make_command_buffers(
+			*m_p_logical_device,
+			*m_p_command_pool,
+			 vk::CommandBufferLevel::ePrimary,
+			 m_p_swapchain->get_image_views().size() // one per framebuffer frame
+		);
+		
+		vk::ClearValue const clear_value {
+			.color = {{{ 0.0f, 0.0f, 0.0f, 1.0f }}}
+		};
+		
+		for ( u32 index{0}; index < m_p_swapchain->get_image_views().size(); ++index ) {
+			auto &command_buffer = (*m_p_command_buffers)[index];
+			command_buffer.begin( {} );
+			command_buffer.beginRenderPass(
+				vk::RenderPassBeginInfo {
+					.renderPass      = *( m_p_pipeline->get_render_pass()   ),
+					.framebuffer     = *( m_p_framebuffers->access()[index] ),
+					.renderArea      =  vk::Rect2D {
+												 .extent = m_p_swapchain->get_surface_extent(),
+										  },
+					.clearValueCount =  1, // TODO: explain
+					.pClearValues    = &clear_value
+				},
+				vk::SubpassContents::eInline
+			);
+			command_buffer.bindPipeline(
+				vk::PipelineBindPoint::eGraphics,
+				*( m_p_pipeline->access() )
+			);
+			//command_buffer.bindDescriptorSets()
+			//command_buffer.setViewport()
+			//command_buffer.setScissor()
+			command_buffer.draw(
+				3, // vertex count
+				1, // instance count
+				0, // first vertex
+				0  // first instance
+			);
+			command_buffer.endRenderPass();
+			command_buffer.end();
+		}
+
+#if 0 // TODO:
+	// initialize a vk::RenderPassBeginInfo with the current imageIndex and some appropriate renderArea and clearValues
+	vk::RenderPassBeginInfo renderPassBeginInfo( *renderPass, *framebuffers[imageIndex], renderArea, clearValues );
+
+	// begin the render pass with an inlined subpass; no secondary command buffers allowed
+	commandBuffer.beginRenderPass( renderPassBeginInfo, vk::SubpassContents::eInline );
+
+	// bind the graphics pipeline
+	commandBuffer.bindPipeline( vk::PipelineBindPoint::eGraphics, *graphicsPipeline );
+
+	// bind an appropriate descriptor set
+	commandBuffer.bindDescriptorSets( vk::PipelineBindPoint::eGraphics, *pipelineLayout, 0, { *descriptorSet }, nullptr );
+
+	// bind the vertex buffer
+	commandBuffer.bindVertexBuffers( 0, { *vertexBuffer }, { 0 } );
+
+	// set viewport and scissor
+	commandBuffer.setViewport( 0, viewport );
+	commandBuffer.setScissor( renderArea );
+
+	// draw the 12 * 3 vertices once, starting with vertex 0 and instance 0
+	commandBuffer.draw( 12 * 3, 1, 0, 0 );
+
+	// end the render pass and stop recording
+	commandBuffer.endRenderPass();
+	commandBuffer.end();
+#endif
 	} // end-of-function: gfx::Renderer::Renderer
 	
 	Renderer::Renderer( Renderer &&other ) noexcept:
@@ -428,5 +498,79 @@ namespace gfx {
 	{
 		return *m_p_window;
 	} // end-of-function: gfx::Renderer::get_window
+	
+	void
+	Renderer::operator()()
+	{
+		// TODO: remove statics
+		#define TIMEOUT 5000 // TODO!
+		
+//		static u32 index { 0 };
+		
+		vk::raii::Semaphore image_acquired_semaphore(
+			*m_p_logical_device,
+			vk::SemaphoreCreateInfo{
+				
+			}
+		);
+		
+		auto const [acquire_result, image_index] {
+			m_p_swapchain->access().acquireNextImage(
+				TIMEOUT,
+				*image_acquired_semaphore
+			)
+		};
+		
+		switch ( acquire_result ) {
+			case vk::Result::eTimeout       : throw "TODO"; break; // TODO
+			case vk::Result::eNotReady      : throw "TODO"; break; // TODO
+			case vk::Result::eSuboptimalKHR :               break; // TODO
+			default: break; // do nothing
+		}
+		
+		vk::raii::Fence fence(
+			*m_p_logical_device,
+			vk::FenceCreateInfo{
+				
+			}
+		);
+		
+		vk::PipelineStageFlags const wait_destination_stage_mask(
+			vk::PipelineStageFlagBits::eColorAttachmentOutput
+		);
+		
+		m_p_graphics_queue->submit(
+			vk::SubmitInfo {
+				.pWaitDstStageMask  = &wait_destination_stage_mask,
+				.commandBufferCount =  1,
+				.pCommandBuffers    = &*(*m_p_command_buffers)[image_index],
+				.pSignalSemaphores  = &*image_acquired_semaphore
+				// TODO
+			},
+			*fence
+		);
+		
+		while ( m_p_logical_device->waitForFences( { *fence }, VK_TRUE, TIMEOUT ) == vk::Result::eTimeout );
+		
+		auto const present_result {
+			m_p_present_queue->presentKHR(
+				vk::PresentInfoKHR {
+					.waitSemaphoreCount = 0,
+					.pWaitSemaphores    = nullptr, // TODO: comment
+					.swapchainCount     = 1,
+					.pSwapchains        = &*(m_p_swapchain->access()),
+					.pImageIndices      = &image_index,
+				}
+			)
+		};
+		
+		switch ( present_result ) {
+			case vk::Result::eSuccess       : break; // TODO
+			case vk::Result::eSuboptimalKHR : break; // TODO
+			default: throw "TODO";
+		}
+		
+//		index = (index + 1) % m_p_swapchain->get_image_views().size();
+	} // end-of-function: gfx::Renderer::operator()
 } // end-of-namespace: gfx
 // EOF

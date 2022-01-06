@@ -336,6 +336,7 @@ main()
 		};
 		while ( window.was_closed() == false ) [[likely]] {
 			window.update();
+			renderer(); // render
 			// TODO: handle input, update logic, render, draw window
 		}
 		spdlog::info( "Exiting MyTemplate..." );

@@ -349,18 +349,32 @@ namespace gfx {
 		return *this;
 	} // end-of-function: gfx::Pipeline::operator=
 	
-	vk::raii::RenderPass const &
+	[[nodiscard]] vk::raii::RenderPass const &
 	Pipeline::get_render_pass() const
 	{
 		spdlog::debug( "Accessing render pass..." );
 		return *m_p_render_pass;
 	} // end-of-function: gfx::Pipeline::get_render_pass
 	
-	vk::raii::RenderPass &
+	[[nodiscard]] vk::raii::RenderPass &
 	Pipeline::get_render_pass()
 	{
 		spdlog::debug( "Accessing render pass..." );
 		return *m_p_render_pass;
 	} // end-of-function: gfx::Pipeline::get_render_pass
+	
+	[[nodiscard]] vk::raii::Pipeline const &
+	Pipeline::access() const
+	{
+		spdlog::debug( "Accessing pipeline..." );
+		return *m_p_graphics_pipeline;
+	} // end-of-function: gfx::Pipeline::access
+	
+	[[nodiscard]] vk::raii::Pipeline &
+	Pipeline::access()
+	{
+		spdlog::debug( "Accessing pipeline..." );
+		return *m_p_graphics_pipeline;
+	} // end-of-function: gfx::Pipeline::access
 } // end-of-namespace: gfx
 // EOF

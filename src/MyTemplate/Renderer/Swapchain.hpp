@@ -19,6 +19,8 @@ class Swapchain final {
 			[[nodiscard]] vk::Extent2D                     const & get_surface_extent() const;
 			[[nodiscard]] vk::SurfaceFormatKHR             const & get_surface_format() const;
 			[[nodiscard]] std::vector<vk::raii::ImageView> const & get_image_views()    const; // TODO: rename/refactor?
+			[[nodiscard]] vk::raii::SwapchainKHR           const & access()             const;
+			[[nodiscard]] vk::raii::SwapchainKHR                 & access()                  ;
 		private:
 			// NOTE: declaration order here matters!
 			vk::SurfaceFormatKHR                    m_surface_format       ;
