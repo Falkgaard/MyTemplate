@@ -16,8 +16,9 @@ class Swapchain final {
 			Swapchain( Swapchain       && ) noexcept;
 			~Swapchain()                    noexcept;
 			// TODO: assignment ops?
-			[[nodiscard]] vk::Extent2D         const & get_surface_extent() const;
-			[[nodiscard]] vk::SurfaceFormatKHR const & get_surface_format() const;
+			[[nodiscard]] vk::Extent2D                     const & get_surface_extent() const;
+			[[nodiscard]] vk::SurfaceFormatKHR             const & get_surface_format() const;
+			[[nodiscard]] std::vector<vk::raii::ImageView> const & get_image_views()    const; // TODO: rename/refactor?
 		private:
 			// NOTE: declaration order here matters!
 			vk::SurfaceFormatKHR                    m_surface_format       ;

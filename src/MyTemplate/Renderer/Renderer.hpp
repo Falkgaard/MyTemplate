@@ -32,6 +32,7 @@ namespace gfx {
 			std::unique_ptr<vk::raii::CommandBuffers>             m_p_command_buffers    ;
 			std::unique_ptr<Swapchain>                            m_p_swapchain          ;
 			std::unique_ptr<Pipeline>                             m_p_pipeline           ;
+			std::unique_ptr<Framebuffers>                         m_p_framebuffers       ;
 			// TODO: queue_family_indices as well? (array)
 			#if 0
 				// LONG TODO:

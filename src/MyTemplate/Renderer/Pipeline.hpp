@@ -14,6 +14,8 @@ namespace gfx {
 			~Pipeline(                              ) noexcept;
 			Pipeline & operator=( Pipeline const &  ) = delete;
 			Pipeline & operator=( Pipeline       && ) noexcept;
+			vk::raii::RenderPass const & get_render_pass() const;
+			vk::raii::RenderPass       & get_render_pass()      ;
 		private:
 			std::unique_ptr<vk::raii::ShaderModule>    m_p_vertex_shader_module   ;
 			std::unique_ptr<vk::raii::ShaderModule>    m_p_fragment_shader_module ;

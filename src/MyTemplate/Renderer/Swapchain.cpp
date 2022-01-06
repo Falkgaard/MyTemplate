@@ -226,5 +226,11 @@ namespace gfx {
 	Swapchain::get_surface_format() const {
 		return m_surface_format;
 	}
+	
+	[[nodiscard]] std::vector<vk::raii::ImageView> const &
+	Swapchain::get_image_views() const
+	{
+		return m_image_views;
+	}
 } // end-of-namespace: gfx	
 // EOF

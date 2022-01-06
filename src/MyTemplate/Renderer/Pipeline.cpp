@@ -348,5 +348,19 @@ namespace gfx {
 		m_p_graphics_pipeline      = std::move( other.m_p_graphics_pipeline      );
 		return *this;
 	} // end-of-function: gfx::Pipeline::operator=
+	
+	vk::raii::RenderPass const &
+	Pipeline::get_render_pass() const
+	{
+		spdlog::debug( "Accessing render pass..." );
+		return *m_p_render_pass;
+	} // end-of-function: gfx::Pipeline::get_render_pass
+	
+	vk::raii::RenderPass &
+	Pipeline::get_render_pass()
+	{
+		spdlog::debug( "Accessing render pass..." );
+		return *m_p_render_pass;
+	} // end-of-function: gfx::Pipeline::get_render_pass
 } // end-of-namespace: gfx
 // EOF

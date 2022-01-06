@@ -35,10 +35,11 @@ namespace vk::raii {
 namespace gfx {
 	// forward declarations:
 		class GlfwInstance;
+		class Framebuffers;
+		class Pipeline    ;
+		class Swapchain   ;
 		class VkInstance  ;
 		class Window      ;
-		class Swapchain   ;
-		class Pipeline    ;
 	
 	// enums:
 		// NOTE: value corresponds to number of frames to allow for static casting

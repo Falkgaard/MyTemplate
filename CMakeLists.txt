@@ -32,6 +32,7 @@ add_executable (
 	"src/${PROJECT_NAME}/Renderer/Window.cpp"
 	"src/${PROJECT_NAME}/Renderer/Swapchain.cpp"
 	"src/${PROJECT_NAME}/Renderer/Pipeline.cpp"
+	"src/${PROJECT_NAME}/Renderer/Framebuffers.cpp"
 	"src/${PROJECT_NAME}/Renderer/Texture.cpp"
 )
 

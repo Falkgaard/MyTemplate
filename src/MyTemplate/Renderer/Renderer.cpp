@@ -5,6 +5,7 @@
 #include "MyTemplate/Renderer/Window.hpp"
 #include "MyTemplate/Renderer/Swapchain.hpp"
 #include "MyTemplate/Renderer/Pipeline.hpp"
+#include "MyTemplate/Renderer/Framebuffers.hpp"
 
 #include <spdlog/spdlog.h>
 #include <vulkan/vulkan.hpp>
@@ -241,8 +242,8 @@ namespace gfx {
 					physical_device.getSurfaceSupportKHR( index, *window.get_surface() ) == VK_TRUE
 				};
 				
-				spdlog::info( "    Evaluating queue family index {}...", index );
-				spdlog::info( "    ... present  support: {}", supports_present  ? "OK!" : "missing!" );
+				spdlog::info( "... Evaluating queue family index {}:", index );
+				spdlog::info( "    ...  present support: {}", supports_present  ? "OK!" : "missing!" );
 				spdlog::info( "    ... graphics support: {}", supports_graphics ? "OK!" : "missing!" );
 				if ( supports_graphics and supports_present ) {
 					maybe_present_index  = index;
@@ -387,6 +388,7 @@ namespace gfx {
 		
 		m_p_swapchain          = std::make_unique<Swapchain>( *m_p_physical_device, *m_p_logical_device, *m_p_window, m_queue_family_indices ); // TODO: refactor params
 		m_p_pipeline           = std::make_unique<Pipeline>( *m_p_logical_device, *m_p_swapchain );
+		m_p_framebuffers       = std::make_unique<Framebuffers>( *m_p_logical_device, *m_p_swapchain, *m_p_pipeline );
 	} // end-of-function: gfx::Renderer::Renderer
 	
 	Renderer::Renderer( Renderer &&other ) noexcept:
@@ -404,7 +406,8 @@ namespace gfx {
 		m_p_command_pool       { std::move( other.m_p_command_pool       ) },
 		m_p_command_buffers    { std::move( other.m_p_command_buffers    ) },
 		m_p_swapchain          { std::move( other.m_p_swapchain          ) },
-		m_p_pipeline           { std::move( other.m_p_pipeline           ) }
+		m_p_pipeline           { std::move( other.m_p_pipeline           ) },
+		m_p_framebuffers       { std::move( other.m_p_framebuffers       ) }
 	{
 		spdlog::info( "Moving a Renderer instance..." );
 	} // end-of-function: gfx::Renderer::Renderer
