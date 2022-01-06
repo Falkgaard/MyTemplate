@@ -38,14 +38,14 @@ namespace gfx {
 		
 		m_p_surface = std::make_unique<vk::raii::SurfaceKHR>( vk_instance.get_instance(), surface_tmp );
 	}
-
+	
 	Window::Window( Window &&other ) noexcept:
 		m_p_surface ( std::exchange(other.m_p_surface, nullptr) ), // TODO: verify
 		m_p_window  ( std::exchange(other.m_p_window,  nullptr) )  // TODO: verify
 	{
 		spdlog::info( "Moving a Window instance..." );
 	}
-
+	
 	Window::~Window() noexcept
 	{
 		spdlog::info( "Destroying a Window instance..." );
@@ -55,33 +55,36 @@ namespace gfx {
 			glfwDestroyWindow( m_p_window );
 		}
 	}
-
+	
 	[[nodiscard]] Window::Dimensions
 	Window::get_dimensions() const
 	{
+		spdlog::debug( "Accessing window dimensions..." );
 		Dimensions dimensions;
 		glfwGetWindowSize( m_p_window, &dimensions.width, &dimensions.height );
 		return dimensions;
 	}
-
+	
 	[[nodiscard]] vk::raii::SurfaceKHR const &
 	Window::get_surface() const
 	{
+		spdlog::debug( "Accessing window surface..." );
 		return *m_p_surface;
 	}
-
+	
 	[[nodiscard]] vk::raii::SurfaceKHR &
 	Window::get_surface()
 	{
+		spdlog::debug( "Accessing window surface..." );
 		return *m_p_surface;
 	}
-
+	
 	[[nodiscard]] bool
 	Window::was_closed() const
 	{
 		return glfwWindowShouldClose( m_p_window );
 	}
-
+	
 	void
 	Window::update()
 	{

@@ -178,23 +178,27 @@ namespace gfx {
 	vk::raii::Context const &
 	VkInstance::get_context() const
 	{
+		spdlog::debug( "Accessing Vulkan context..." );
 		return *m_p_context;
 	}
 	
 	vk::raii::Context &
 	VkInstance::get_context()
 	{
+		spdlog::debug( "Accessing Vulkan context..." );
 		return *m_p_context;
 	}
 	
 	vk::raii::Instance const &
 	VkInstance::get_instance() const
 	{
+		spdlog::debug( "Accessing Vulkan instance..." );
 		return *m_p_instance;
 	}
 	
 	vk::raii::Instance &
 	VkInstance::get_instance() {
+		spdlog::debug( "Accessing Vulkan instance..." );
 		return *m_p_instance;
 	}
 	
