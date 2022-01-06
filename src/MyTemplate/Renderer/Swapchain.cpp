@@ -236,14 +236,14 @@ namespace gfx {
 	[[nodiscard]] vk::raii::SwapchainKHR const &
 	Swapchain::access() const
 	{
-		spdlog::debug( "Accessing swapchain..." );
+		//spdlog::debug( "Accessing swapchain..." );
 		return *m_p_swapchain;
 	} // end-of-function: gfx::Swapchain::access
 	
 	[[nodiscard]] vk::raii::SwapchainKHR &
 	Swapchain::access()
 	{
-		spdlog::debug( "Accessing swapchain..." );
+		//spdlog::debug( "Accessing swapchain..." );
 		return *m_p_swapchain;
 	} // end-of-function: gfx::Swapchain::access
 	

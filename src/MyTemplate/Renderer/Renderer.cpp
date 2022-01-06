@@ -60,7 +60,7 @@ namespace gfx {
 					is_adequate = false;
 			}
 			return is_adequate;
-		} // end-of-function: gfx::<FILE>::is_supporting_extensions
+		} // end-of-function: gfx::<unnamed>::is_supporting_extensions
 		
 		[[nodiscard]] u32
 		score_physical_device(
@@ -91,7 +91,7 @@ namespace gfx {
 				spdlog::info( "... final score: {}", score );
 			}
 			return score;
-		} // end-of-function: gfx::<FILE>::score_physical_device
+		} // end-of-function: gfx::<unnamed>::score_physical_device
 		
 		[[nodiscard]] auto
 		select_physical_device(
@@ -130,7 +130,7 @@ namespace gfx {
 				return std::make_unique<vk::raii::PhysicalDevice>( std::move( *p_best_match ) );
 			}
 			else [[unlikely]] throw std::runtime_error { "Physical device does not support swapchains!" };
-		} // end-of-function: gfx::<FILE>::select_physical_device
+		} // end-of-function: gfx::<unnamed>::select_physical_device
 		
 		#if !defined( NDEBUG )
 			VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -171,7 +171,7 @@ namespace gfx {
 				}
 				// TODO: expand with more info from callback_data_p
 				return false; // TODO: why?
-			} // end-of-function: gfx::<FILE>::debug_callback
+			} // end-of-function: gfx::<unnamed>::debug_callback
 		#endif	
 		
 		#if !defined( NDEBUG )
@@ -219,7 +219,7 @@ namespace gfx {
 						.pfnUserCallback = &debug_callback
 					}
 				);
-			} // end-of-function: gfx::<FILE>::make_debug_messenger
+			} // end-of-function: gfx::<unnamed>::make_debug_messenger
 		#endif
 		
 		[[nodiscard]] auto
@@ -270,7 +270,7 @@ namespace gfx {
 				};
 			}
 			else [[unlikely]] throw std::runtime_error { "Queue family support for either graphics or present missing!" };
-		} // end-of-function: gfx::<FILE>::select_queue_family_indices
+		} // end-of-function: gfx::<unnamed>::select_queue_family_indices
 		
 		[[nodiscard]] auto
 		make_logical_device(
@@ -315,7 +315,7 @@ namespace gfx {
 					.ppEnabledExtensionNames = required_device_extensions.data()
 				}
 			);
-		} // end-of-function: gfx::make_logical_device
+		} // end-of-function: gfx::<unnamed>::make_logical_device
 		
 		[[nodiscard]] auto
 		make_queue(
@@ -328,7 +328,7 @@ namespace gfx {
 			return std::make_unique<vk::raii::Queue>(
 				logical_device.getQueue( queue_family_index, queue_index )
 			);
-		} // end-of-function: gfx::make_queue
+		} // end-of-function: gfx::<unnamed>::make_queue
 		
 		[[nodiscard]] auto
 		make_command_pool(
@@ -345,7 +345,7 @@ namespace gfx {
 					.queueFamilyIndex = graphics_queue_family_index
 				}
 			);
-		} // end-of-function: gfx::make_command_pool
+		} // end-of-function: gfx::<unnamed>::make_command_pool
 		
 		[[nodiscard]] auto
 		make_command_buffers(
@@ -364,32 +364,48 @@ namespace gfx {
 					.commandBufferCount =  command_buffer_count
 				}
 			);
-		} // end-of-function: gfx::make_command_buffers
+		} // end-of-function: gfx::<unnamed>::make_command_buffers
 		
+		void
+		recreate_swapchain(
+			std::unique_ptr<Swapchain>     &p_swapchain,
+			vk::raii::PhysicalDevice const &physical_device,
+			vk::raii::Device         const &logical_device,
+			Window                   const &window,
+			QueueFamilyIndices       const &queue_family_indices
+		)
+		{
+			spdlog::debug( "Remaking swapchain!" );
+			p_swapchain.reset( nullptr );
+			std::make_unique<Swapchain>(
+				physical_device, logical_device, window, queue_family_indices
+			);	
+		} // end-of-function: gfx::<unnamed>::recreate_swapchain
 	} // end-of-unnamed-namespace
 	
 	Renderer::Renderer()
 	{
 		spdlog::info( "Constructing a Renderer instance..." );
-		m_p_glfw_instance      = std::make_unique<GlfwInstance>();
-		m_p_vk_instance        = std::make_unique<VkInstance>( *m_p_glfw_instance );
+		m_should_remake_swapchain = false;
+		m_p_glfw_instance         = std::make_unique<GlfwInstance>();
+		m_p_vk_instance           = std::make_unique<VkInstance>( *m_p_glfw_instance );
 		#if !defined( NDEBUG )
-		//	m_p_debug_messenger = std::make_unique<DebugMessenger>( *m_p_vk_instance ); // TODO: make into its own class
+		//	m_p_debug_messenger    = std::make_unique<DebugMessenger>( *m_p_vk_instance ); // TODO: make into its own class
 		#endif
-		m_p_window             = std::make_unique<Window>( *m_p_glfw_instance, *m_p_vk_instance );
+		m_p_window                = std::make_unique<Window>( *m_p_glfw_instance, *m_p_vk_instance, m_should_remake_swapchain );
+// TODO: refactor block below   
+		m_p_physical_device       = select_physical_device( *m_p_vk_instance );
+		m_queue_family_indices    = select_queue_family_indices( *m_p_physical_device, *m_p_window );
+		m_p_logical_device        = make_logical_device( *m_p_physical_device, m_queue_family_indices );
+		m_p_graphics_queue        = make_queue( *m_p_logical_device, m_queue_family_indices.graphics, 0 ); // NOTE: 0 since we
+		m_p_present_queue         = make_queue( *m_p_logical_device, m_queue_family_indices.present,  0 ); // only use 1 queue
+// TODO: refactor block above   
+		m_p_swapchain             = std::make_unique<Swapchain>( *m_p_physical_device, *m_p_logical_device, *m_p_window, m_queue_family_indices ); // TODO: refactor params
+		m_p_pipeline              = std::make_unique<Pipeline>( *m_p_logical_device, *m_p_swapchain );
+		m_p_framebuffers          = std::make_unique<Framebuffers>( *m_p_logical_device, *m_p_swapchain, *m_p_pipeline );
 // TODO: refactor block below
-		m_p_physical_device    = select_physical_device( *m_p_vk_instance );
-		m_queue_family_indices = select_queue_family_indices( *m_p_physical_device, *m_p_window );
-		m_p_logical_device     = make_logical_device( *m_p_physical_device, m_queue_family_indices );
-		m_p_graphics_queue     = make_queue( *m_p_logical_device, m_queue_family_indices.graphics, 0 ); // NOTE: 0 since we
-		m_p_present_queue      = make_queue( *m_p_logical_device, m_queue_family_indices.present,  0 ); // only use 1 queue
-// TODO: refactor block above
-		m_p_swapchain          = std::make_unique<Swapchain>( *m_p_physical_device, *m_p_logical_device, *m_p_window, m_queue_family_indices ); // TODO: refactor params
-		m_p_pipeline           = std::make_unique<Pipeline>( *m_p_logical_device, *m_p_swapchain );
-		m_p_framebuffers       = std::make_unique<Framebuffers>( *m_p_logical_device, *m_p_swapchain, *m_p_pipeline );
-// TODO: refactor block below:
-		m_p_command_pool       = make_command_pool( *m_p_logical_device, m_queue_family_indices.graphics );
-		m_p_command_buffers    = make_command_buffers(
+		m_p_command_pool          = make_command_pool( *m_p_logical_device, m_queue_family_indices.graphics );
+		m_p_command_buffers       = make_command_buffers(
 			*m_p_logical_device,
 			*m_p_command_pool,
 			 vk::CommandBufferLevel::ePrimary,
@@ -397,7 +413,7 @@ namespace gfx {
 		);
 		
 		vk::ClearValue const clear_value {
-			.color = {{{ 0.0f, 0.0f, 0.0f, 1.0f }}}
+			.color = {{{ 0.02f, 0.02f, 0.02f, 1.0f }}}
 		};
 		
 		for ( u32 index{0}; index < m_p_swapchain->get_image_views().size(); ++index ) {
@@ -502,16 +518,11 @@ namespace gfx {
 	void
 	Renderer::operator()()
 	{
-		// TODO: remove statics
 		#define TIMEOUT 5000 // TODO!
 		
-//		static u32 index { 0 };
-		
-		vk::raii::Semaphore image_acquired_semaphore(
+		vk::raii::Semaphore const image_acquired_semaphore(
 			*m_p_logical_device,
-			vk::SemaphoreCreateInfo{
-				
-			}
+			vk::SemaphoreCreateInfo{}
 		);
 		
 		auto const [acquire_result, image_index] {
@@ -522,18 +533,24 @@ namespace gfx {
 		};
 		
 		switch ( acquire_result ) {
-			case vk::Result::eTimeout       : throw "TODO"; break; // TODO
-			case vk::Result::eNotReady      : throw "TODO"; break; // TODO
-			case vk::Result::eSuboptimalKHR :               break; // TODO
+			case vk::Result::eTimeout           : throw "TODO"; break; // TODO
+			case vk::Result::eNotReady          : throw "TODO"; break; // TODO
+			case vk::Result::eSuboptimalKHR     : [[fallthrough]];
+			case vk::Result::eErrorOutOfDateKHR : {
+				m_should_remake_swapchain = false;
+				recreate_swapchain(
+					m_p_swapchain,
+					*m_p_physical_device,
+					*m_p_logical_device,
+					*m_p_window,
+					m_queue_family_indices
+				);
+				return;
+			}
 			default: break; // do nothing
 		}
 		
-		vk::raii::Fence fence(
-			*m_p_logical_device,
-			vk::FenceCreateInfo{
-				
-			}
-		);
+		vk::raii::Fence const fence( *m_p_logical_device, vk::FenceCreateInfo{} );
 		
 		vk::PipelineStageFlags const wait_destination_stage_mask(
 			vk::PipelineStageFlagBits::eColorAttachmentOutput
@@ -545,7 +562,6 @@ namespace gfx {
 				.commandBufferCount =  1,
 				.pCommandBuffers    = &*(*m_p_command_buffers)[image_index],
 				.pSignalSemaphores  = &*image_acquired_semaphore
-				// TODO
 			},
 			*fence
 		);
@@ -565,12 +581,32 @@ namespace gfx {
 		};
 		
 		switch ( present_result ) {
-			case vk::Result::eSuccess       : break; // TODO
-			case vk::Result::eSuboptimalKHR : break; // TODO
+			case vk::Result::eErrorOutOfDateKHR : [[fallthrough]];
+			case vk::Result::eSuboptimalKHR     : {
+				m_should_remake_swapchain = false;
+				recreate_swapchain(
+					m_p_swapchain,
+					*m_p_physical_device,
+					*m_p_logical_device,
+					*m_p_window,
+					m_queue_family_indices
+				);
+				break;
+			}
+			case vk::Result::eSuccess : break;
 			default: throw "TODO";
 		}
-		
-//		index = (index + 1) % m_p_swapchain->get_image_views().size();
+
+		if ( m_should_remake_swapchain ) {
+			m_should_remake_swapchain = false;
+			recreate_swapchain(
+				m_p_swapchain,
+				*m_p_physical_device,
+				*m_p_logical_device,
+				*m_p_window,
+				m_queue_family_indices
+			);
+		}
 	} // end-of-function: gfx::Renderer::operator()
 } // end-of-namespace: gfx
 // EOF

@@ -9,7 +9,7 @@ namespace gfx {
 	class Window final {
 		public:
 			struct Dimensions final { int width, height; }; // TODO: refactor later
-			Window( GlfwInstance const &, VkInstance const & );
+			Window( GlfwInstance const &, VkInstance const &, bool &set_on_resize );
 			Window(                ) = delete;
 			Window( Window const & ) = delete;
 			Window( Window &&      ) noexcept;
@@ -23,6 +23,8 @@ namespace gfx {
 		private:
 			GLFWwindow                            *m_p_window;
 			std::unique_ptr<vk::raii::SurfaceKHR>  m_p_surface;
+			bool                                  *m_p_set_on_resize;
+			static void on_resize_callback( GLFWwindow *, [[maybe_unused]] int width, [[maybe_unused]] int height );
 	}; // end-of-class: Window
 } // end-of-namespace: gfx
 
