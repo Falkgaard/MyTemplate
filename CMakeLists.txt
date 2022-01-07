@@ -27,13 +27,10 @@ add_executable (
 	${PROJECT_NAME}
 	"src/${PROJECT_NAME}/main.cpp"
 	"src/${PROJECT_NAME}/Renderer/GlfwInstance.cpp"
-	"src/${PROJECT_NAME}/Renderer/VkInstance.cpp"
 	"src/${PROJECT_NAME}/Renderer/Renderer.cpp"
 	"src/${PROJECT_NAME}/Renderer/Window.cpp"
-	"src/${PROJECT_NAME}/Renderer/Swapchain.cpp"
 	"src/${PROJECT_NAME}/Renderer/Pipeline.cpp"
 	"src/${PROJECT_NAME}/Renderer/Framebuffers.cpp"
-	"src/${PROJECT_NAME}/Renderer/Texture.cpp"
 )
 
 target_compile_definitions ( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS )

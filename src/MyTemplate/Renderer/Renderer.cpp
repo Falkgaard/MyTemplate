@@ -69,6 +69,33 @@ namespace gfx {
 				// TODO: expand with more info from pCallbackData
 				return false; // TODO: explain why
 			} // end-of-function: debugCallback
+			
+			
+			
+			[[nodiscard]] auto
+			loadBinaryFromFile( std::string const &binaryFilename )
+			{  // TODO: null_terminated_string_view?
+				spdlog::info( "Attempting to open binary file `{}`...", binaryFilename );
+				std::ifstream binaryFile {
+					binaryFilename,
+					std::ios::binary | std::ios::ate // start at the end of the binary
+				};
+				if ( binaryFile ) {
+					spdlog::info( "... successful!" );
+					auto const binarySize {
+						static_cast<std::size_t>( binaryFile.tellg() )
+					};
+					spdlog::info( "... binary size: {}", binarySize );
+					binaryFile.seekg( 0 );
+					std::vector<char> binaryBuffer( binarySize );
+					binaryFile.read( binaryBuffer.data(), binarySize );
+					return binaryBuffer;
+				}
+				else {
+					spdlog::warn( "... failure!" );
+					throw std::runtime_error { "Failed to load binary file!" };
+				}
+			} // end-of-function: loadBinaryFromFile()
 		#endif // end-of-debug-block
 	} // end-of-unnamed-namespace	
 	
@@ -776,7 +803,298 @@ namespace gfx {
 					}
 				);
 			}	
-		}
+		} // end-of-function: Renderer::makeSwapchain
+		
+		
+		
+		[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule>
+		Renderer::makeShaderModuleFromBinary( std::vector<char> const &shaderBinary ) const
+		{
+			spdlog::info( "Creating shader module from shader SPIR-V bytecode..." );
+			
+			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
+			assert( mpDevice != nullptr );
+			
+			return std::make_unique<vk::raii::ShaderModule>(
+				**mpDevice,
+				vk::ShaderModuleCreateInfo {
+					.codeSize = shaderBinary.size(),
+					.pCode    = reinterpret_cast<u32 const *>( shaderBinary.data() ) /// TODO: UB or US?
+				}	
+			);
+		} // end-of-function: Renderer::makeShaderModuleFromBinary
+		
+		
+		
+		[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule>
+		Renderer::makeShaderModuleFromFile( std::string const &shaderSpirvBytecodeFilename ) const
+		{
+			spdlog::info( "Creating shader module from shader SPIR-V bytecode file..." );
+			return makeShaderModuleFromBinary( loadBinaryFromFile( shaderSpirvBytecodeFilename ) );
+		} // end-of-function: Renderer::makeShaderModuleFromFile
+		
+		
+		
+		void
+		Renderer::makeGraphicsPipelineLayout()
+		{
+			spdlog::info( "Creating graphics pipeline layout..." );
+			
+			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
+			assert( mpDevice != nullptr );
+			
+			mpGraphicsPipelineLayout = std::make_unique<vk::raii::PipelineLayout>(
+				**mpDevice,
+				vk::PipelineLayoutCreateInfo {
+					.setLayoutCount         = 0,       // TODO: explain
+					.pSetLayouts            = nullptr, // TODO: explain
+					.pushConstantRangeCount = 0,       // TODO: explain
+					.pPushConstantRanges    = nullptr  // TODO: explain
+				}
+			);
+		} // end-of-function: Renderer::makeGraphicsPipelineLayout
+		
+		
+		
+		[[nodiscard]] auto
+		Renderer::makeRenderPass()
+		{
+			spdlog::info( "Creating render pass..." );
+			
+			// pre-condition(s):
+			//   shouldn't be null or ??? unless the function is called in the wrong order:
+			assert( mpDevice       != nullptr );
+//			assert( mSurfaceFormat != ???     );
+			
+			vk::AttachmentDescription const colorAttachmentDesc {
+				.format         = mSurfaceFormat.format,
+				.samples        = vk::SampleCountFlagBits::e1,      // no MSAA yet
+				.loadOp         = vk::AttachmentLoadOp::eClear,
+				.storeOp        = vk::AttachmentStoreOp::eStore,
+				.stencilLoadOp  = vk::AttachmentLoadOp::eDontCare,  // no depth/stencil yet
+				.stencilStoreOp = vk::AttachmentStoreOp::eDontCare, // no depth/stencil yet
+				.initialLayout  = vk::ImageLayout::eUndefined,
+				.finalLayout    = vk::ImageLayout::ePresentSrcKHR
+			};
+			
+			vk::AttachmentReference const colorAttachmentRef {
+				.attachment = 0, // index 0; we only have one attachment at the moment
+				.layout     = vk::ImageLayout::eColorAttachmentOptimal
+			};
+			
+			vk::SubpassDescription const colorSubpassDesc {
+				.pipelineBindPoint    =  vk::PipelineBindPoint::eGraphics,
+				.colorAttachmentCount =  1,
+				.pColorAttachments    = &colorAttachmentRef
+			};
+			
+			mpRenderPass = std::make_unique<vk::raii::RenderPass>(
+				**mpDevice,
+				vk::RenderPassCreateInfo {
+					.attachmentCount =  1,
+					.pAttachments    = &colorAttachmentDesc,
+					.subpassCount    =  1,
+					.pSubpasses      = &colorSubpassDesc
+				}
+			);
+		} // end-of-function: Renderer::makeRenderPass
+
+
+
+
+
+
+
+
+		
+		void
+		Renderer::makeGraphicsPipeline()
+		{
+			// TODO: lots of refactoring!
+			spdlog::info( "Creating graphics pipeline..." );
+			
+			
+			// pre-condition(s):
+			//   shouldn't be null or ??? unless the function is called in the wrong order:
+			assert( mpDevice       != nullptr );
+			
+			spdlog::info( "Creating shader modules..." );
+			auto const vertexModule   = makeShaderModuleFromFile( "../dat/shaders/test.vert.spv" );
+			auto const fragmentModule = makeShaderModuleFromFile( "../dat/shaders/test.frag.spv" );	
+			
+			spdlog::info( "Creating pipeline shader stages..." );
+			vk::PipelineShaderStageCreateInfo const shaderStageCreateInfo[] {
+				{
+					.stage  =  vk::ShaderStageFlagBits::eVertex,
+					.module = *vertexModule,
+					.pName  =  "main" // shader program entry point
+				// .pSpecializationInfo is unused (for now); but it allows for setting shader constants
+				},
+				{
+					.stage  =  vk::ShaderStageFlagBits::eFragment,
+					.module = *fragmentModule,
+					.pName  =  "main" // shader program entry point
+				// .pSpecializationInfo is unused (for now); but it allows for setting shader constants
+				}
+			};
+			
+			// WHAT: configures the vertex data format (spacing, instancing, loading...)
+			vk::PipelineVertexInputStateCreateInfo const vertexInputStateCreateInfo {
+				// NOTE: no data here since it's hardcoded (for now)
+				.vertexBindingDescriptionCount   = 0,
+				.pVertexBindingDescriptions      = nullptr,
+				.vertexAttributeDescriptionCount = 0,
+				.pVertexAttributeDescriptions    = nullptr
+			};
+			
+			// WHAT: configures the primitive topology of the geometry
+			vk::PipelineInputAssemblyStateCreateInfo const inputAssemblyStateCreateInfo {
+				.topology               = vk::PrimitiveTopology::eTriangleList,
+				.primitiveRestartEnable = VK_FALSE // unused (for now); allows designating strip gap indices
+			};
+			
+			vk::Viewport const viewport {
+				.x        = 0.0f,
+				.y        = 0.0f,
+				.width    = static_cast<f32>( mSurfaceExtent.width  ),
+				.height   = static_cast<f32>( mSurfaceExtent.height ),
+				.minDepth = 0.0f,
+				.maxDepth = 1.0f
+			};
+			
+			vk::Rect2D const scissor {
+				.offset = { 0, 0 },
+				.extent = mSurfaceExtent
+			};
+			
+			vk::PipelineViewportStateCreateInfo const viewportStateCreateInfo {
+				.viewportCount =  1,
+				.pViewports    = &viewport,
+				.scissorCount  =  1,
+				.pScissors     = &scissor,
+			};
+			
+			vk::PipelineRasterizationStateCreateInfo const rasterizationStateCreateInfo {
+				.depthClampEnable        = VK_FALSE, // mostly just useful for shadow maps; requires GPU feature
+				.rasterizerDiscardEnable = VK_FALSE, // seems pointless
+				.polygonMode             = vk::PolygonMode::eFill, // wireframe and point requires GPU feature
+				.cullMode                = vk::CullModeFlagBits::eBack, // backface culling
+				.frontFace               = vk::FrontFace::eClockwise, // vertex winding order
+				.depthBiasEnable         = VK_FALSE, // mostly just useful for shadow maps
+				.depthBiasConstantFactor = 0.0f,     // mostly just useful for shadow maps
+				.depthBiasClamp          = 0.0f,     // mostly just useful for shadow maps
+				.depthBiasSlopeFactor    = 0.0f,     // mostly just useful for shadow maps
+				.lineWidth               = 1.0f      // >1 requires wideLines GPU feature
+			};
+			
+			vk::PipelineMultisampleStateCreateInfo const multisampleStateCreateInfo {
+				.rasterizationSamples  = vk::SampleCountFlagBits::e1,
+				.sampleShadingEnable   = VK_FALSE, // unused; otherwise enables MSAA; requires GPU feature
+				.minSampleShading      = 1.0f,
+				.pSampleMask           = nullptr,
+				.alphaToCoverageEnable = VK_FALSE,
+				.alphaToOneEnable      = VK_FALSE 
+			}; // TODO: revisit later
+			
+			// vk::PipelineDepthStencilStateCreateInfo const depthStencilStateCreateInfo {
+			// 	// TODO: unused for now; revisit later
+			// };
+			
+			vk::PipelineColorBlendAttachmentState const colorBlendAttachmentState {
+				.blendEnable         = VK_FALSE,
+				.srcColorBlendFactor = vk::BlendFactor::eOne,
+				.dstColorBlendFactor = vk::BlendFactor::eZero,
+				.colorBlendOp        = vk::BlendOp::eAdd,
+				.srcAlphaBlendFactor = vk::BlendFactor::eOne,
+				.dstAlphaBlendFactor = vk::BlendFactor::eZero,
+				.alphaBlendOp        = vk::BlendOp::eAdd,
+				.colorWriteMask      = vk::ColorComponentFlagBits::eR
+											| vk::ColorComponentFlagBits::eG
+											| vk::ColorComponentFlagBits::eB
+											| vk::ColorComponentFlagBits::eA,
+			};
+			
+			// NOTE: blendEnable and logicOpEnable are mutually exclusive!
+			vk::PipelineColorBlendStateCreateInfo const colorBlendStateCreateInfo {
+				.logicOpEnable     =  VK_FALSE,
+				.logicOp           =  vk::LogicOp::eCopy,
+				.attachmentCount   =  1, // TODO: explain
+				.pAttachments      = &colorBlendAttachmentState,
+				.blendConstants    =  std::array<f32,4>{ 0.0f, 0.0f, 0.0f, 0.0f }
+			};
+			
+			// e.g: std::array<vk::DynamicState> const dynamic_states {
+			//         vk::DynamicState::eLineWidth	
+			//      };
+			// 
+			// vk::PipelineDynamicStateCreateInfo const
+			// dynamic_state_create_info
+			// { // NOTE: unused (for now)
+			// 	.dynamicStateCount = 0,
+			// 	.pDynamicStates    = nullptr
+			// };
+			
+			makeGraphicsPipelineLayout();
+			makeRenderPass();
+			mpGraphicsPipeline = std::make_unique<vk::raii::Pipeline>(
+				**mpDevice,
+				nullptr,
+				vk::GraphicsPipelineCreateInfo {
+					.stageCount          =   2,
+					.pStages             =   shaderStageCreateInfo,
+					.pVertexInputState   =  &vertexInputStateCreateInfo,
+					.pInputAssemblyState =  &inputAssemblyStateCreateInfo,
+					.pViewportState      =  &viewportStateCreateInfo,
+					.pRasterizationState =  &rasterizationStateCreateInfo,
+					.pMultisampleState   =  &multisampleStateCreateInfo,
+					.pDepthStencilState  =   nullptr, // unused for now
+					.pColorBlendState    =  &colorBlendStateCreateInfo,
+					.pDynamicState       =   nullptr, // unused for now
+					.layout              = **mpGraphicsPipelineLayout,
+					.renderPass          = **mpRenderPass,
+					.subpass             =   0,
+					.basePipelineHandle  =   VK_NULL_HANDLE,
+					.basePipelineIndex   =   -1,
+				}
+			);
+		} // end-of-function: Renderer::makeGraphicsPipeline
+		
+		
+		
+		void
+		Renderer::makeFramebuffers()
+		{
+			spdlog::info( "Creating framebuffers..." );
+			
+			// TODO(preconditions)
+			
+			mFramebuffers.clear();
+			mFramebuffers.reserve( mFramebufferCount );
+			for ( auto const &imageView: mImageViews ) {
+				mFramebuffers.emplace_back(
+					**mpDevice,
+					vk::FramebufferCreateInfo {
+						.renderPass      = **mpRenderPass,
+						.attachmentCount =   1, // only color for now
+						.pAttachments    = &*imageView,
+						.width           =   mSurfaceExtent.width,
+						.height          =   mSurfaceExtent.height,
+						.layers          =   1 // TODO: explain
+					}
+				);
+			}
+		} // end-of-function: Renderer::makeFramebuffers		
+		
+		
+		
+		void
+		Renderer::makeCommandBuffers()
+		{
+			
+		} // end-of-function: Renderer::makeCommandBuffers
+		
 		
 		
 		
@@ -828,28 +1146,10 @@ namespace gfx {
 			}
 			
 			// TODO(refactor)
-			mpSwapchain = std::make_unique<Swapchain>(
-				*mpPhysicalDevice,
-				*mpDevice,
-				*mpWindow,
-				 mQueueFamilies
-			);
-			
-			mpGraphicsPipeline = std::make_unique<Pipeline>(
-				*mpDevice,
-				*mpSwapchain
-			);
-			
-			mpFramebuffers = std::make_unique<Framebuffers>(
-				*mpDevice,
-				*mpSwapchain,
-				*mpGraphicsPipeline
-			);
-			
-			mpCommandBuffers = makeCommandBuffers(
-				vk::CommandBufferLevel::ePrimary,
-				mFramebufferCount
-			);
+			makeSwapchain();
+			makeGraphicsPipeline();
+			makeFramebuffers();
+			makeCommandBuffers();
 			
 			// TODO: refactor
 			vk::ClearValue const clearValue { .color = {{{ 0.02f, 0.02f, 0.02f, 1.0f }}} };
