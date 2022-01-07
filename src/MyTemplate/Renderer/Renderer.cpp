@@ -38,9 +38,17 @@ namespace gfx {
 		std::unique_ptr<Pipeline>                             p_pipeline             ;
 		std::unique_ptr<Framebuffers>                         p_framebuffers         ; // NOTE: Must be deleted before swapchain!
 		bool                                                  should_remake_swapchain;
+		// TODO: refactor into a struct of per-frame data (synchro, buffers, etc)
+		std::vector<vk::raii::Semaphore>                      image_available        ; // synchronization
+		std::vector<vk::raii::Semaphore>                      image_presentable      ; // synchronization
+		std::vector<vk::raii::Fence>                          images_in_flight       ; // synchronization
+		std::vector<vk::raii::Fence>                          fences_in_flight       ; // synchronization
+		u64                                                   frame_number           ;
 	}; // end-of-struct: gfx::Renderer::State	
 	
 	namespace { // private (file-scope)
+		u32 constexpr g_max_concurrent_frames { 2 }; // TODO: refactor
+		
 		// TODO: refactor out
 		std::array constexpr required_device_extensions {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -387,6 +395,31 @@ namespace gfx {
 		} // end-of-function: gfx::<unnamed>::make_command_buffers
 		
 		void
+		make_synch_primitives(
+			Renderer::State &state
+		)
+		{
+			spdlog::info( "Creating synchronization primitives..." );
+			// TODO: refactor into array of struct?
+			state.image_presentable .clear();
+			state.image_available   .clear();
+			state.fences_in_flight  .clear();
+			state.images_in_flight  .clear();
+
+			state.image_presentable .reserve( g_max_concurrent_frames );
+			state.image_available   .reserve( g_max_concurrent_frames );
+			state.fences_in_flight  .reserve( g_max_concurrent_frames );
+//			state.images_in_flight  .resize(
+//				state.p_swapchain->get_image_views().size() // one per frame
+//			);
+			for ( auto i{0}; i<g_max_concurrent_frames; ++i ) {
+				state.image_presentable .emplace_back( *state.p_logical_device, vk::SemaphoreCreateInfo {} );
+				state.image_available   .emplace_back( *state.p_logical_device, vk::SemaphoreCreateInfo {} );
+				state.fences_in_flight  .emplace_back( *state.p_logical_device, vk::FenceCreateInfo     {} );
+			}
+		} // end-of-function: gfx::<unnamed>::make_synch_primitives
+		
+		void
 		make_swapchain( Renderer::State &state )
 		{
 			spdlog::debug( "Creating swapchain and necessary state!" );
@@ -404,7 +437,7 @@ namespace gfx {
 			}
 			if ( state.p_pipeline ) {
 				state.p_pipeline.reset();
-			}
+		   }
 			if ( state.p_swapchain ) {
 				state.p_swapchain.reset();
 			}
@@ -492,6 +525,7 @@ namespace gfx {
 		spdlog::info( "Constructing a Renderer instance..." );
 		m_p_state = std::make_unique<Renderer::State>();
 		m_p_state->should_remake_swapchain = false;
+		m_p_state->frame_number            = 0;
 		m_p_state->p_glfw_instance         = std::make_unique<GlfwInstance>();
 		m_p_state->p_vk_instance           = std::make_unique<VkInstance>( *m_p_state->p_glfw_instance );
 		#if !defined( NDEBUG )
@@ -506,8 +540,8 @@ namespace gfx {
 		m_p_state->p_present_queue         = make_queue( *m_p_state->p_logical_device, m_p_state->queue_family_indices.present,  0 ); // only use 1 queue
 		m_p_state->p_command_pool          = make_command_pool( *m_p_state->p_logical_device, m_p_state->queue_family_indices.graphics );
 		make_swapchain( *m_p_state );
-
-
+		make_synch_primitives( *m_p_state ); // TODO: re-run whenever swapchain image count changes!
+   
 #if 0 // TODO:
 	// initialize a vk::RenderPassBeginInfo with the current imageIndex and some appropriate renderArea and clearValues
 	vk::RenderPassBeginInfo renderPassBeginInfo( *renderPass, *framebuffers[imageIndex], renderArea, clearValues );
@@ -546,6 +580,7 @@ namespace gfx {
 	Renderer::~Renderer() noexcept
 	{
 		spdlog::info( "Destroying a Renderer instance..." );
+		m_p_state->p_logical_device->waitIdle();
 		if ( m_p_state and m_p_state->p_command_buffers )
 			m_p_state->p_command_buffers->clear();
 	} // end-of-function: gfx::Renderer::~Renderer
@@ -561,7 +596,113 @@ namespace gfx {
 	{
 		return *m_p_state->p_window;
 	} // end-of-function: gfx::Renderer::get_window
+   
+	void
+	Renderer::operator()()
+	{
+		#define TIMEOUT 5000000 // TEMP! TODO // UINT64_MAX? (or limits)
+		auto const frame = m_p_state->frame_number++ % g_max_concurrent_frames;
+//
+//		if ( m_p_state->p_logical_device->waitForFences(
+//				*(m_p_state->fences_in_flight[frame]),
+//				VK_TRUE,
+//				TIMEOUT
+//			) != vk::Result::eSuccess // i.e. eTimeout
+//		)                            // the rest will raise exceptions
+//		{
+//			// TODO: decide on what to do...
+//			spdlog::warn( "Timeout in draw..." ); // TODO: better message
+//		}
+//		
+		u32        acquired_index;
+		vk::Result acquired_result;
+		try {
+			auto const [result, index] {
+				m_p_state->p_swapchain->access().acquireNextImage(
+					TIMEOUT,
+					*(m_p_state->image_available[frame])
+				)
+			};
+			acquired_index  = index;
+			acquired_result = result;
+		}
+		catch( vk::OutOfDateKHRError const &e ) {}
+//      // vk::Result::eSuccess
+//      // vk::Result::eTimeout
+//      // vk::Result::eNotReady
+//      // vk::Result::eSuboptimalKHR
+//		
+//		if ( acquired_result == vk::Result::eSuboptimalKHR
+//		or   acquired_result == vk::Result::eErrorOutOfDateKHR ) {
+//			make_swapchain( *m_p_state );
+//			return;
+//		}
+//		else if ( acquired_result != vk::Result::eSuccess)
+//			throw std::runtime_error { "Failed to acquire swapchain image!" };
+//		
+//		if ( (m_p_state->images_in_flight[acquired_index]).getStatus )
+//			if ( m_p_state->p_logical_device->waitForFences(
+//					*m_p_state->images_in_flight[acquired_index],
+//					VK_TRUE,
+//					TIMEOUT
+//				) != vk::Result::eSuccess // i.e. eTimeout
+//			)                            // the rest will raise exceptions
+//			{
+//				// TODO: decide on what to do...
+//				spdlog::warn( "Timeout in draw..." ); // TODO: better message
+//			}
+//
+//		
+		vk::PipelineStageFlags const wait_destination_stage_mask(
+			vk::PipelineStageFlagBits::eColorAttachmentOutput
+		);
+		
+		m_p_state->p_graphics_queue->submit(
+			vk::SubmitInfo {
+				.waitSemaphoreCount   = 1,
+				.pWaitSemaphores      = &*m_p_state->image_available[acquired_index],
+				.pWaitDstStageMask    = &wait_destination_stage_mask,
+				.commandBufferCount   = 1,
+				.pCommandBuffers      = &*(*m_p_state->p_command_buffers)[acquired_index],
+				.signalSemaphoreCount = 1,
+				.pSignalSemaphores    = &*m_p_state->image_presentable[acquired_index], 
+			} // `, *fence` here + wait loop later on VkSubpassDependency?
+		);
+//		
+//		while (
+//			m_p_state->p_logical_device->waitForFences(
+//				{ *fence },
+//				VK_TRUE,
+//				TIMEOUT
+//			) == vk::Result::eTimeout
+//		);
+//		
+		vk::Result present_result;
+		try {
+			present_result = m_p_state->p_present_queue->presentKHR(
+				vk::PresentInfoKHR {
+					.waitSemaphoreCount = 1,
+					.pWaitSemaphores    = &*m_p_state->image_presentable[acquired_index],
+					.swapchainCount     = 1,
+					.pSwapchains        = &*(m_p_state->p_swapchain->access()),
+					.pImageIndices      = &acquired_index,
+				}
+			);
+		}
+		// TODO find a way to avoid try-catch here
+		catch ( vk::OutOfDateKHRError const &e) { /*do nothing*/ }
+//		
+//		if ( m_p_state->should_remake_swapchain
+//		or   present_result==vk::Result::eSuboptimalKHR
+//		or   present_result==vk::Result::eErrorOutOfDateKHR ) {
+//			m_p_state->should_remake_swapchain = false;
+//			make_swapchain( *m_p_state );
+//		}
+//		else if ( present_result != vk::Result::eSuccess )
+//			throw std::runtime_error { "Failed to present swapchain image!" };
+	} // end-of-function: gfx::Renderer::operator()
 	
+#if 0 // OLD
 	void
 	Renderer::operator()()
 	{
@@ -645,5 +786,6 @@ namespace gfx {
 		else if ( present_result != vk::Result::eSuccess )
 			throw std::runtime_error { "Failed to present swapchain image!" };
 	} // end-of-function: gfx::Renderer::operator()
+#endif // end OLD
 } // end-of-namespace: gfx
 // EOF
