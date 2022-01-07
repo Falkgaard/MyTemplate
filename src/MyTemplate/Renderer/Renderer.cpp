@@ -33,11 +33,13 @@ namespace gfx {
 		
 		
 		// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
-		void Renderer::enableValidationLayers( vk::InstanceCreateInfo &createInfo )
+		void
+		Renderer::enableValidationLayers( vk::InstanceCreateInfo &createInfo )
 		{
 			spdlog::info( "... enabling validation layers:" );
 			
 			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
 			assert( mpVkContext != nullptr );
 			
 			auto const availableLayers { mpVkContext->enumerateInstanceLayerProperties() };
@@ -73,15 +75,18 @@ namespace gfx {
 		
 		
 		// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
-		void Renderer::enableInstanceExtensions( vk::InstanceCreateInfo &createInfo )
+		void
+		Renderer::enableInstanceExtensions( vk::InstanceCreateInfo &createInfo )
 		{
 			spdlog::info( "... enabling instance extensions:" );
 			
 			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
 			assert( mpGlfwInstance != nullptr      );
 			assert( mpVkContext    != nullptr      );
-			assert( mInstanceExtensions.is_empty() ); // should be empty unless the function has been called multiple times (which it shouldn't)
-		
+			//   should be empty unless the function has been called multiple times (which it shouldn't)
+			assert( mInstanceExtensions.is_empty() );
+			
 			auto const availableExtensions    { mpVkContext->enumerateInstanceExtensionProperties() };
 			auto const glfwRequiredExtensions { mpGlfwInstance->getRequiredExtensions()             };
 			
@@ -123,7 +128,8 @@ namespace gfx {
 		
 		
 		
-		[[nodiscard]] bool Renderer::meetsDeviceExtensionRequirements( vk::raii::PhysicalDevice const &physicalDevice )
+		[[nodiscard]] bool
+		Renderer::meetsDeviceExtensionRequirements( vk::raii::PhysicalDevice const &physicalDevice )
 		{
 			// NOTE: all extensions in this function are device extensions
 			auto const &availableExtensions { physicalDevice.enumerateDeviceExtensionProperties() };
@@ -158,11 +164,14 @@ namespace gfx {
 		
 		
 		
-		[[nodiscard]] u32 Renderer::calculateScore( vk::raii::PhysicalDevice const &physicalDevice )
+		[[nodiscard]] u32
+		Renderer::calculateScore( vk::raii::PhysicalDevice const &physicalDevice )
 		{
-			auto const properties { physicalDevice.getProperties() }; // TODO: KHR2?
-			auto const features   { physicalDevice.getFeatures()   }; // TODO: 2KHR?
 			spdlog::info( "Scoring physical device `{}`...", properties.deviceName.data() );
+			
+			auto const properties { physicalDevice.getProperties() };
+			auto const features   { physicalDevice.getFeatures()   };
+			
 			u32 score { 0 };
 			
 			if ( not meetsDeviceExtensionRequirements( physicalDevice ) ) [[unlikely]]
@@ -188,13 +197,17 @@ namespace gfx {
 		
 		
 		
-		void Renderer::selectPhysicalDevice()
+		void
+		Renderer::selectPhysicalDevice()
 		{
 			spdlog::info( "Selecting the most suitable physical device..." );
 			
 			// pre-condition(s):
-			assert( mpVkContext  != nullptr );
-			assert( mpVkInstance != nullptr );
+			//   shouldn't be null unless the function is called in the wrong order:
+			assert( mpVkContext      != nullptr );
+			assert( mpVkInstance     != nullptr );
+			//   should be null unless the function has been called multiple times (which it shouldn't)
+			assert( mpPhysicalDevice == nullptr );
 			
 			vk::raii::PhysicalDevices physicalDevices( *mpVkInstance );
 			spdlog::info( "... found {} physical device(s)...", physicalDevices.size() );
@@ -226,7 +239,7 @@ namespace gfx {
 
 		#if !defined( NDEBUG )
 			VKAPI_ATTR VkBool32 VKAPI_CALL
-			debugCallback(
+			Renderer::debugCallback(
 				VkDebugUtilsMessageSeverityFlagBitsEXT      msgSeverity,
 				VkDebugUtilsMessageTypeFlagsEXT             msgType,
 				VkDebugUtilsMessengerCallbackDataEXT const *fpCallbackData,
@@ -269,13 +282,17 @@ namespace gfx {
 		
 		
 		#if !defined( NDEBUG )
-			void Renderer::makeDebugMessenger()
+			void
+			Renderer::makeDebugMessenger()
 			{
 				spdlog::info( "Creating debug messenger..." );
 				
 				// pre-condition(s):
-				assert( mpVkContext  != nullptr );
-				assert( mpVkInstance != nullptr );
+				//   shouldn't be null unless the function is called in the wrong order:
+				assert( mpVkContext      != nullptr );
+				assert( mpVkInstance     != nullptr );
+				//   should be null unless the function has been called multiple times (which it shouldn't)
+				assert( mpDebugMessenger == nullptr );
 				
 				auto const extensionProperties { mpVkContext->enumerateInstanceExtensionProperties() };
 				
@@ -316,13 +333,18 @@ namespace gfx {
 		
 		
 		
-		void Renderer::selectQueueFamilies()
+		void
+		Renderer::selectQueueFamilies()
 		{
-			spdlog::info( "Selecting queue families..." );				
+			spdlog::info( "Selecting queue families..." );
 			
 			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
 			assert( mpWindow         != nullptr );
 			assert( mpPhysicalDevice != nullptr );
+			//   should be undefined unless the function has been called multiple times (which it shouldn't)
+			assert( mQueueFamilyIndices.presentIndex  == QueueFamilyIndices::kUndefined );
+			assert( mQueueFamilyIndices.graphicsIndex == QueueFamilyIndices::kUndefined );
 			
 			std::optional<u32> maybePresentIndex  {};
 			std::optional<u32> maybeGraphicsIndex {};
@@ -369,9 +391,12 @@ namespace gfx {
 			spdlog::info( "Creating logical device..." );
 			
 			// pre-condition(s):
+			//   shouldn't be undefined and null unless the function is called in the wrong order:
 			assert( mQueueFamilyIndices.presentIndex  != QueueFamilyIndices::kUndefined );
 			assert( mQueueFamilyIndices.graphicsIndex != QueueFamilyIndices::kUndefined );
 			assert( mpPhysicalDevice                  != nullptr                        );
+			//   should be null unless the function has been called multiple times (which it shouldn't):
+			assert( mpDevice                          == nullptr                        ); 
 			
 			// TODO: refactor approach when more queues are needed
 			std::vector<vk::DeviceQueueCreateInfo> createInfos {};
@@ -410,61 +435,102 @@ namespace gfx {
 			);
 		} // end-of-function: Renderer::makeLogicalDevice
 		
-		[[nodiscard]] auto
-		make_queue(
-			vk::raii::Device const &logical_device,
-			u32              const  queue_family_index,
-			u32              const  queue_index
-		)
-		{ // TODO: refactor away third arg and use automated tracking + exceptions
-			spdlog::info( "Creating handle for queue #{} of queue family #{}...", queue_index, queue_family_index );
-			return std::make_unique<vk::raii::Queue>(
-				logical_device.getQueue( queue_family_index, queue_index )
-			);
-		} // end-of-function: gfx::<unnamed>::make_queue
 		
+		
+		// TODO: refactor away second arg and use automated tracking + exceptions
 		[[nodiscard]] auto
-		make_command_pool(
-			vk::raii::Device const &logical_device,
-			u32              const  graphics_queue_family_index
-		)
+		Renderer::makeQueue( u32 const queueFamilyIndex, u32 const queueIndex )
+		{
+			spdlog::info( "Creating handle for queue #{} of queue family #{}...", queueIndex, queueFamilyIndex );
+			
+			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
+			assert( mpDevice != nullptr );
+			
+			return std::make_unique<vk::raii::Queue>( mpDevice->getQueue( queueFamilyIndex, queueIndex );
+		} // end-of-function: Renderer::makeQueue
+		
+		
+		
+		void
+		Renderer::makeGraphicsQueue()
+		{
+			// Just using one queue for now. TODO(1.0)
+			spdlog::info( "Creating graphics queue..." );
+			
+			// pre-condition(s):
+			//   should be null unless the function has been called multiple times (which it shouldn't):
+			assert( mpGraphicsQueue == nullptr ); 
+			
+			mpGraphicsQueue = makeQueue( mQueueFamilyIndices.graphicsIndex, 0 );
+		} // end-of-function: Renderer::makeGraphicsQueue
+		
+		
+		
+		void
+		Renderer::makePresentQueue()
+		{
+			// Just using one queue for now. TODO(1.0)
+			spdlog::info( "Creating present queue..." );
+			
+			// pre-condition(s):
+			//	  should be null unless the function has been called multiple times (which it shouldn't):
+			assert( mpPresentQueue == nullptr ); 
+			
+			mpGraphicsQueue = makeQueue( mQueueFamilyIndices.presentIndex, mQueueFamilyIndices.areSeparate ? 0 : 1 );
+		} // end-of-function: Renderer::makePresentQueue
+		
+		
+		
+		void
+		Renderer::makeCommandPool()
 		{
 			spdlog::info( "Creating command buffer pool..." );
-			return std::make_unique<vk::raii::CommandPool>(
-				logical_device,
+			
+			// pre-condition(s):
+			//   shouldn't be null and undefined unless the function is called in the wrong order:
+			assert( mpGraphicsQueue                   != nullptr                        ); 
+			assert( mQueueFamilyIndices.graphicsIndex != QueueFamilyIndices::kUndefined ); 
+			//	  should be null unless the function has been called multiple times (which it shouldn't):
+			assert( mpCommandPool == nullptr ); 
+			
+			mpCommandPool = std::make_unique<vk::raii::CommandPool>(
+				*mpDevice,
 				vk::CommandPoolCreateInfo {
 					// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
 					//       Also, one pool would be needed for each queue family (if ever extended).
-					.queueFamilyIndex = graphics_queue_family_index
+					.queueFamilyIndex = mQueueFamilyIndices.graphicsIndex
 				}
 			);
-		} // end-of-function: gfx::<unnamed>::make_command_pool
+		} // end-of-function: Renderer::makeCommandPool
+		
+		
 		
 		[[nodiscard]] auto
-		make_command_buffers(
-			Renderer::State        const &state,
-			vk::CommandBufferLevel const  level,
-			u32                    const  command_buffer_count
+		makeCommandBuffers(
+			vk::CommandBufferLevel const level,
+			u32                    const bufferCount
 		)
 		{
-			spdlog::info( "Creating {} command buffer(s)...", command_buffer_count );
+			// TODO(refactor)
+			spdlog::info( "Creating {} command buffer(s)...", bufferCount );
 			return std::make_unique<vk::raii::CommandBuffers>(
-				*state.pDevice,
+				*mpDevice,
 				vk::CommandBufferAllocateInfo {
-					.commandPool        = **state.pCommandPool,
+					.commandPool        = **impCommandPool,
 					.level              =   level,
-					.commandBufferCount =   command_buffer_count
+					.commandBufferCount =   bufferCount
 				}
 			);
-		} // end-of-function: gfx::<unnamed>::make_command_buffers
+		} // end-of-function: Renderer::makeCommandBuffers()
+		
+		
 		
 		void
-		make_synch_primitives(
-			Renderer::State &state
-		)
+		makeSyncPrimitives()
 		{
+			// TODO(refactor)
 			spdlog::info( "Creating synchronization primitives..." );
-			// TODO: refactor into array of struct?
 			state.imagePresentable .clear();
 			state.imageAvailable   .clear();
 			state.fences_in_flight  .clear();
