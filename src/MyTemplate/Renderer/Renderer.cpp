@@ -20,88 +20,83 @@
 namespace gfx {	
 	struct Renderer::State final {
 		// NOTE: declaration order here is very important!
-		std::unique_ptr<GlfwInstance>                         p_glfw_instance        ;
-		std::unique_ptr<VkInstance>                           p_vk_instance          ;
+		std::unique_ptr<GlfwInstance>                         pGlfwInstance     ;
+		std::unique_ptr<VkInstance>                           pVkInstance       ;
 		#if !defined( NDEBUG )
-			std::unique_ptr<vk::raii::DebugUtilsMessengerEXT>  p_debug_messenger      ; // TODO: refactor into own class?
+			std::unique_ptr<vk::raii::DebugUtilsMessengerEXT>  pDebugMessenger   ; // TODO: refactor into own class?
 		#endif
-		std::unique_ptr<Window>                               p_window               ;
-		std::unique_ptr<vk::raii::PhysicalDevice>             p_physical_device      ; // TODO: refactor into LogicalDevice
-		QueueFamilyIndices                                    queue_family_indices   ; // TODO: refactor into LogicalDevice
-		std::unique_ptr<vk::raii::Device>                     p_logical_device       ; // TODO: refactor into own class
-		std::unique_ptr<vk::raii::Queue>                      p_graphics_queue       ;
-		std::unique_ptr<vk::raii::Queue>                      p_present_queue        ;
-		std::unique_ptr<vk::raii::CommandPool>                p_command_pool         ;
+		std::unique_ptr<Window>                               pWindow           ;
+		std::unique_ptr<vk::raii::PhysicalDevice>             pPhysicalDevice   ; // TODO: refactor into LogicalDevice
+		QueueFamilyIndices                                    queueFamilies     ; // TODO: refactor into LogicalDevice
+		std::unique_ptr<vk::raii::Device>                     pDevice           ; // TODO: refactor into own class
+		std::unique_ptr<vk::raii::Queue>                      pGraphicsQueue    ;
+		std::unique_ptr<vk::raii::Queue>                      pPresentQueue     ;
+		std::unique_ptr<vk::raii::CommandPool>                pCommandPool      ;
 		// recreating part follows:
-		std::unique_ptr<Swapchain>                            p_swapchain            ;
-		std::unique_ptr<vk::raii::CommandBuffers>             p_command_buffers      ; // NOTE: Must be deleted before command pool!
-		std::unique_ptr<Pipeline>                             p_pipeline             ;
-		std::unique_ptr<Framebuffers>                         p_framebuffers         ; // NOTE: Must be deleted before swapchain!
-		bool                                                  should_remake_swapchain;
+		std::unique_ptr<Swapchain>                            pSwapchain        ;
+		std::unique_ptr<vk::raii::CommandBuffers>             pCommandBuffers   ; // NOTE: Must be deleted before command pool!
+		std::unique_ptr<Pipeline>                             pGraphicsPipeline ;
+		std::unique_ptr<Framebuffers>                         pFramebuffers     ; // NOTE: Must be deleted before swapchain!
+		bool                                                  bBadSwapchain     ;
 		// TODO: refactor into a struct of per-frame data (synchro, buffers, etc)
-		std::vector<vk::raii::Semaphore>                      image_available        ; // synchronization
-		std::vector<vk::raii::Semaphore>                      image_presentable      ; // synchronization
-		std::vector<vk::raii::Fence>                          images_in_flight       ; // synchronization
-		std::vector<vk::raii::Fence>                          fences_in_flight       ; // synchronization
-		u64                                                   frame_number           ;
+		std::vector<vk::raii::Semaphore>                      imageAvailable    ; // synchronization
+		std::vector<vk::raii::Semaphore>                      imagePresentable  ; // synchronization
+		std::vector<vk::raii::Fence>                          images_in_flight  ; // synchronization
+		std::vector<vk::raii::Fence>                          fences_in_flight  ; // synchronization
+		u64                                                   currentFrame      ;
 	}; // end-of-struct: gfx::Renderer::State	
 	
 	namespace { // private (file-scope)
-		u32 constexpr g_max_concurrent_frames { 2 }; // TODO: refactor
+		u32 constexpr gMaxConcurrentFrames { 2 }; // TODO: refactor
 		
 		// TODO: refactor out
-		std::array constexpr required_device_extensions {
+		std::array constexpr gRequiredDeviceExtensions {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME
 		};
 		
 		[[nodiscard]] bool
-		is_supporting_extensions(
-			vk::raii::PhysicalDevice const &physical_device
-		)
+		meetsExtensionRequirements( vk::raii::PhysicalDevice const &physicalDevice )
 		{
-			auto const &available_device_extensions {
-				physical_device.enumerateDeviceExtensionProperties()
-			};
+			// NOTE: all extensions in this function are device extensions
+			auto const &availableExtensions { physicalDevice.enumerateDeviceExtensionProperties() };
 			
-			if constexpr ( g_is_debug_mode ) {
+			if constexpr ( gIsDebugMode ) {
 				spdlog::info( "... checking device extension support:" );
 				// print required and available device extensions:
-				for ( auto const &required_device_extension: required_device_extensions )
-					spdlog::info( "      required  : `{}`", required_device_extension );
-				for ( auto const &available_device_extension: available_device_extensions )
-					spdlog::info( "      available : `{}`", available_device_extension.extensionName );
+				for ( auto const &requiredExtension: gRequiredDeviceExtensions )
+					spdlog::info( "      required  : `{}`", requiredExtension );
+				for ( auto const &availableExtension: availableExtensions )
+					spdlog::info( "      available : `{}`", availableExtension.extensionName );
 			}	
 			
-			bool is_adequate { true }; // assume true until proven otherwise
-			for ( auto const &required_device_extension: required_device_extensions ) {
-				bool is_supported { false }; // assume false until found
-				for ( auto const &available_device_extension: available_device_extensions ) {
-					if ( std::strcmp( required_device_extension, available_device_extension.extensionName ) == 0 ) [[unlikely]] {
-						is_supported = true;
+			bool bIsAdequate { true }; // assume true until proven otherwise
+			for ( auto const &requiredExtension: gRequiredDeviceExtensions ) {
+				bool bIsSupported { false }; // assume false until found
+				for ( auto const &availableExtension: availableExtensions ) {
+					if ( std::strcmp( requiredExtension, availableExtension.extensionName ) == 0 ) [[unlikely]] {
+						bIsSupported = true;
 						break; // early exit
 					}
 				}
 				spdlog::info(
 					"      support for required device extension `{}`: {}",
-					required_device_extension, is_supported ? "OK" : "missing!"
+					requiredExtension, bIsSupported ? "OK" : "missing!"
 				);
-				if ( not is_supported ) [[unlikely]]
-					is_adequate = false;
+				if ( not bIsSupported ) [[unlikely]]
+					bIsAdequate = false;
 			}
-			return is_adequate;
-		} // end-of-function: gfx::<unnamed>::is_supporting_extensions
+			return bIsAdequate;
+		} // end-of-function: gfx::<unnamed>::meetsExtensionRequirements
 		
 		[[nodiscard]] u32
-		score_physical_device(
-			vk::raii::PhysicalDevice const &physical_device
-		)
+		calculateScore( vk::raii::PhysicalDevice const &physicalDevice )
 		{
-			auto const properties { physical_device.getProperties() }; // TODO: KHR2?
-			auto const features   { physical_device.getFeatures()   }; // TODO: 2KHR?
+			auto const properties { physicalDevice.getProperties() }; // TODO: KHR2?
+			auto const features   { physicalDevice.getFeatures()   }; // TODO: 2KHR?
 			spdlog::info( "Scoring physical device `{}`...", properties.deviceName.data() );
 			u32 score { 0 };
 			
-			if ( not is_supporting_extensions( physical_device ) ) [[unlikely]]
+			if ( not meetsExtensionRequirements( physicalDevice ) ) [[unlikely]]
 				spdlog::info( "... device extension support: insufficient!" );
 			else if ( features.geometryShader == VK_FALSE ) [[unlikely]]
 				spdlog::info( "... geometry shader support: false" );
@@ -116,136 +111,123 @@ namespace gfx {
 				else [[unlikely]] {
 					spdlog::info( "... type: integrated" );
 				}
-				// TODO: add more things if needed
+				// TODO: add additional score factors later on (if needed)
 				spdlog::info( "... final score: {}", score );
 			}
 			return score;
-		} // end-of-function: gfx::<unnamed>::score_physical_device
+		} // end-of-function: gfx::<unnamed>::calculateScore
 		
-		[[nodiscard]] auto
-		select_physical_device(
-			VkInstance const &vk_instance
-		)
+		// NOTE: pre-conditions(s): `pContext` and `pVkInstance` are valid.
+		void Renderer::selectPhysicalDevice()
 		{
 			spdlog::info( "Selecting the most suitable physical device..." );
-			vk::raii::PhysicalDevices physical_devices( vk_instance.get_instance() );
-			spdlog::info( "... found {} physical device(s)...", physical_devices.size() );
-			if ( physical_devices.empty() ) [[unlikely]]
+			vk::raii::PhysicalDevices physicalDevices( pVkInstance );
+			spdlog::info( "... found {} physical device(s)...", physicalDevices.size() );
+			if ( physicalDevices.empty() ) [[unlikely]]
 				throw std::runtime_error { "Unable to find any physical devices!" };
 			
-			auto *p_best_match {
-				&physical_devices.front()
-			};
+			auto *pBestMatch { &physicalDevices.front() };
+			auto  bestScore  {  score( *pBestMatch )    };
 			
-			auto best_score {
-				score_physical_device( *p_best_match )
-			};
-			
-			for ( auto &current_physical_device: physical_devices | std::views::drop(1) ) {
-				auto const score {
-					score_physical_device( current_physical_device )
-				};
-				if ( score > best_score) {
-					best_score   =  score;
-					p_best_match = &current_physical_device;
+			for ( auto &currentPhysicalDevice: physicalDevices | std::views::drop(1) ) {
+				auto const score { calculateScore( currentPhysicalDevice ) };
+				if ( score > bestScore) {
+					bestScore  =  score;
+					pBestMatch = &currentPhysicalDevice;
 				}
 			}
 			
-			if ( best_score > 0 ) [[likely]] {
+			if ( bestScore > 0 ) [[likely]] {
 				spdlog::info(
 					"... selected physical device `{}` with a final score of: {}",
-					p_best_match->getProperties().deviceName.data(), best_score
+					pBestMatch->getProperties().deviceName.data(), bestScore
 				);
-				return std::make_unique<vk::raii::PhysicalDevice>( std::move( *p_best_match ) );
+				pPhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>( std::move( *pBestMatch ) );
 			}
 			else [[unlikely]] throw std::runtime_error { "Physical device does not support swapchains!" };
-		} // end-of-function: gfx::<unnamed>::select_physical_device
+		} // end-of-function: Renderer::selectPhysicalDevice
 		
 		#if !defined( NDEBUG )
 			VKAPI_ATTR VkBool32 VKAPI_CALL
-			debug_callback(
-				VkDebugUtilsMessageSeverityFlagBitsEXT      severity_flags,
-				VkDebugUtilsMessageTypeFlagsEXT             type_flags,
-				VkDebugUtilsMessengerCallbackDataEXT const *callback_data_p,
-				void * // unused for now
+			debugCallback(
+				VkDebugUtilsMessageSeverityFlagBitsEXT      msgSeverity,
+				VkDebugUtilsMessageTypeFlagsEXT             msgType,
+				VkDebugUtilsMessengerCallbackDataEXT const *fpCallbackData,
+				void * // unused for now, TODO
 			)
 			{
 				// TODO: replace invocation duplication by using a function map?
-				auto const  msg_type {
-					vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(type_flags) )
+				auto const msgTypeName {
+					vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(msgType) )
 				};
-				auto const  msg_severity {
-					static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(severity_flags)
+				auto const msgSeverityLevel {
+					static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(msgSeverity)
 				};
-				auto const  msg_id        { callback_data_p->messageIdNumber };
-				auto const &msg_id_name_p { callback_data_p->pMessageIdName  };
-				auto const &msg_p         { callback_data_p->pMessage        };
-				switch (msg_severity) {
+				auto const  msgId      { fpCallbackData->messageIdNumber };
+				auto const &pMsgIdName { fpCallbackData->pMessageIdName  };
+				auto const &pMsg       { fpCallbackData->pMessage        };
+				switch (msgSeverityLevel) {
 					[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
-						spdlog::error( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+						spdlog::error( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
 						break;
 					}
 					[[likely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
-						spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+						spdlog::info( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
 						break;
 					}
-					case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: find better fit?
-						spdlog::info( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+					case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: find a better fit?
+						spdlog::info( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
 						break;
 					}
 					[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
-						spdlog::warn( "[{}] {} (#{}): {}", msg_type, msg_id_name_p, msg_id, msg_p );
+						spdlog::warn( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
 						break;
 					}
 				}
-				// TODO: expand with more info from callback_data_p
-				return false; // TODO: why?
-			} // end-of-function: gfx::<unnamed>::debug_callback
+				// TODO: expand with more info from pCallbackData
+				return false; // TODO: explain why
+			} // end-of-function: gfx::<unnamed>::debugCallback
 		#endif	
 		
 		#if !defined( NDEBUG )
 			[[nodiscard]] auto
-			make_debug_messenger(
-				vk::raii::Context  const &vk_context,
-				vk::raii::Instance const &vk_instance
-			)
+			// NOTE: pre-conditions(s): `state.pContext` and `state.pVkInstance` are valid.
+			makeDebugMessenger( Render::State const &state )
 			{
 				spdlog::info( "Creating debug messenger..." );
 				
-				auto const extension_properties {
-					vk_context.enumerateInstanceExtensionProperties()
-				};
+				auto const extensionProperties { pContext->enumerateInstanceExtensionProperties() };
 				
 				// look for debug utils extension:
-				auto const search_result {
+				auto const searchResultIterator {
 					std::find_if(
-						std::begin( extension_properties ),
-						std::end(   extension_properties ),
-						[]( auto const &extension_properties ) {
-							return std::strcmp( extension_properties.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME ) == 0;
+						std::begin( extensionProperties ),
+						std::end(   extensionProperties ),
+						[]( auto const &extensionProperties ) {
+							return std::strcmp( extensionProperties.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME ) == 0;
 						}
 					)
 				};
-				if ( search_result == std::end( extension_properties ) ) [[unlikely]]
+				if ( searchResultIterator == std::end( extensionProperties ) ) [[unlikely]]
 					throw std::runtime_error { "Could not find " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " extension!" };
 				
-				vk::DebugUtilsMessageSeverityFlagsEXT const severity_flags {
+				vk::DebugUtilsMessageSeverityFlagsEXT const severityFlags {
 					vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
 					vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
 				};
 				
-				vk::DebugUtilsMessageTypeFlagsEXT const type_flags {
+				vk::DebugUtilsMessageTypeFlagsEXT const typeFlags {
 					vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral     |
 					vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
 					vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
 				};
 				
 				return std::make_unique<vk::raii::DebugUtilsMessengerEXT>(
-					vk_instance,
+					*pVkInstance,
 					vk::DebugUtilsMessengerCreateInfoEXT {
-						.messageSeverity =  severity_flags,
-						.messageType     =  type_flags,
-						.pfnUserCallback = &debug_callback
+						.messageSeverity =  severityFlags,
+						.messageType     =  typeFlags,
+						.pfnUserCallback = &debugCallback
 					}
 				);
 			} // end-of-function: gfx::<unnamed>::make_debug_messenger
@@ -340,8 +322,8 @@ namespace gfx {
 					.pQueueCreateInfos       = queue_create_infos.data(),
 					.enabledLayerCount       = 0,       // no longer used; TODO: add conditionally to support older versions?
 					.ppEnabledLayerNames     = nullptr, // ^ ditto
-					.enabledExtensionCount   = static_cast<u32>( required_device_extensions.size() ),
-					.ppEnabledExtensionNames = required_device_extensions.data()
+					.enabledExtensionCount   = static_cast<u32>( gRequiredDeviceExtensions.size() ),
+					.ppEnabledExtensionNames = gRequiredDeviceExtensions.data()
 				}
 			);
 		} // end-of-function: gfx::<unnamed>::make_logical_device
@@ -385,9 +367,9 @@ namespace gfx {
 		{
 			spdlog::info( "Creating {} command buffer(s)...", command_buffer_count );
 			return std::make_unique<vk::raii::CommandBuffers>(
-				*state.p_logical_device,
+				*state.pDevice,
 				vk::CommandBufferAllocateInfo {
-					.commandPool        = **state.p_command_pool,
+					.commandPool        = **state.pCommandPool,
 					.level              =   level,
 					.commandBufferCount =   command_buffer_count
 				}
@@ -401,21 +383,21 @@ namespace gfx {
 		{
 			spdlog::info( "Creating synchronization primitives..." );
 			// TODO: refactor into array of struct?
-			state.image_presentable .clear();
-			state.image_available   .clear();
+			state.imagePresentable .clear();
+			state.imageAvailable   .clear();
 			state.fences_in_flight  .clear();
 			state.images_in_flight  .clear();
 
-			state.image_presentable .reserve( g_max_concurrent_frames );
-			state.image_available   .reserve( g_max_concurrent_frames );
-			state.fences_in_flight  .reserve( g_max_concurrent_frames );
+			state.imagePresentable .reserve( gMaxConcurrentFrames );
+			state.imageAvailable   .reserve( gMaxConcurrentFrames );
+			state.fences_in_flight  .reserve( gMaxConcurrentFrames );
 //			state.images_in_flight  .resize(
 //				state.p_swapchain->get_image_views().size() // one per frame
 //			);
-			for ( auto i{0}; i<g_max_concurrent_frames; ++i ) {
-				state.image_presentable .emplace_back( *state.p_logical_device, vk::SemaphoreCreateInfo {} );
-				state.image_available   .emplace_back( *state.p_logical_device, vk::SemaphoreCreateInfo {} );
-				state.fences_in_flight  .emplace_back( *state.p_logical_device, vk::FenceCreateInfo     {} );
+			for ( auto i{0}; i<gMaxConcurrentFrames; ++i ) {
+				state.imagePresentable .emplace_back( *state.pDevice, vk::SemaphoreCreateInfo {} );
+				state.imageAvailable   .emplace_back( *state.pDevice, vk::SemaphoreCreateInfo {} );
+				state.fences_in_flight  .emplace_back( *state.pDevice, vk::FenceCreateInfo     {} );
 			}
 		} // end-of-function: gfx::<unnamed>::make_synch_primitives
 		
@@ -424,46 +406,46 @@ namespace gfx {
 		{
 			spdlog::debug( "Creating swapchain and necessary state!" );
 			
-			state.p_window->wait_for_resize();
-			state.p_logical_device->waitIdle();
+			state.pWindow->wait_for_resize();
+			state.pDevice->waitIdle();
 			
 			// delete previous state (if any) in the right order:
-			if ( state.p_framebuffers ) {
-				state.p_framebuffers.reset();
+			if ( state.pFramebuffers ) {
+				state.pFramebuffers.reset();
 			}
-			if ( state.p_command_buffers ) {
-				state.p_command_buffers->clear();
-				state.p_command_buffers.reset();
+			if ( state.pCommandBuffers ) {
+				state.pCommandBuffers->clear();
+				state.pCommandBuffers.reset();
 			}
-			if ( state.p_pipeline ) {
-				state.p_pipeline.reset();
+			if ( state.pGraphicsPipeline ) {
+				state.pGraphicsPipeline.reset();
 		   }
-			if ( state.p_swapchain ) {
-				state.p_swapchain.reset();
+			if ( state.pSwapchain ) {
+				state.pSwapchain.reset();
 			}
 			
-			state.p_swapchain = std::make_unique<Swapchain>(
-				*state.p_physical_device,
-				*state.p_logical_device,
-				*state.p_window,
-				 state.queue_family_indices
+			state.pSwapchain = std::make_unique<Swapchain>(
+				*state.pPhysicalDevice,
+				*state.pDevice,
+				*state.pWindow,
+				 state.queueFamilies
 			);
 			
-			state.p_pipeline = std::make_unique<Pipeline>(
-				*state.p_logical_device,
-				*state.p_swapchain
+			state.pGraphicsPipeline = std::make_unique<Pipeline>(
+				*state.pDevice,
+				*state.pSwapchain
 			);
 			
-			state.p_framebuffers = std::make_unique<Framebuffers>(
-				*state.p_logical_device,
-				*state.p_swapchain,
-				*state.p_pipeline
+			state.pFramebuffers = std::make_unique<Framebuffers>(
+				*state.pDevice,
+				*state.pSwapchain,
+				*state.pGraphicsPipeline
 			);
 			
-			state.p_command_buffers = make_command_buffers(
+			state.pCommandBuffers = make_command_buffers(
 				state,
 				vk::CommandBufferLevel::ePrimary,
-				state.p_swapchain->get_image_views().size() // one per framebuffer frame
+				state.pSwapchain->get_image_views().size() // one per framebuffer frame
 			);
 			
 			// TODO: refactor
@@ -471,15 +453,15 @@ namespace gfx {
 				.color = {{{ 0.02f, 0.02f, 0.02f, 1.0f }}}
 			};
 			
-			for ( u32 index{0}; index < state.p_swapchain->get_image_views().size(); ++index ) {
-				auto &command_buffer = (*state.p_command_buffers)[index];
+			for ( u32 index{0}; index < state.pSwapchain->get_image_views().size(); ++index ) {
+				auto &command_buffer = (*state.pCommandBuffers)[index];
 				command_buffer.begin( {} );
 				command_buffer.beginRenderPass(
 					vk::RenderPassBeginInfo {
-						.renderPass      = *( state.p_pipeline->get_render_pass()   ),
-						.framebuffer     = *( state.p_framebuffers->access()[index] ),
+						.renderPass      = *( state.pGraphicsPipeline->get_render_pass()   ),
+						.framebuffer     = *( state.pFramebuffers->access()[index] ),
 						.renderArea      = vk::Rect2D {
-						                    .extent = state.p_swapchain->get_surface_extent(),
+						                    .extent = state.pSwapchain->get_surface_extent(),
 						                 },
 						.clearValueCount =  1, // TODO: explain
 						.pClearValues    = &clear_value
@@ -488,7 +470,7 @@ namespace gfx {
 				);
 				command_buffer.bindPipeline(
 					vk::PipelineBindPoint::eGraphics,
-					*( state.p_pipeline->access() )
+					*( state.pGraphicsPipeline->access() )
 				);
 				//command_buffer.bindDescriptorSets()
 				//command_buffer.setViewport()
@@ -523,24 +505,24 @@ namespace gfx {
 		//		GraphicsPipeline
 		//		CommandBuffers
 		spdlog::info( "Constructing a Renderer instance..." );
-		m_p_state = std::make_unique<Renderer::State>();
-		m_p_state->should_remake_swapchain = false;
-		m_p_state->frame_number            = 0;
-		m_p_state->p_glfw_instance         = std::make_unique<GlfwInstance>();
-		m_p_state->p_vk_instance           = std::make_unique<VkInstance>( *m_p_state->p_glfw_instance );
+		pState = std::make_unique<Renderer::State>();
+		pState->should_remake_swapchain = false;
+		pState->frame_number            = 0;
+		pState->p_glfw_instance         = std::make_unique<GlfwInstance>();
+		pState->p_vk_instance           = std::make_unique<VkInstance>( *pState->p_glfw_instance );
 		#if !defined( NDEBUG )
 		//	m_p_debug_messenger    = std::make_unique<DebugMessenger>( *m_p_vk_instance ); // TODO: make into its own class
 		#endif
-		m_p_state->p_window                = std::make_unique<Window>( *m_p_state->p_glfw_instance, *m_p_state->p_vk_instance, m_p_state->should_remake_swapchain );
+		pState->p_window                = std::make_unique<Window>( *pState->p_glfw_instance, *pState->p_vk_instance, pState->should_remake_swapchain );
 // TODO: refactor block below   
-		m_p_state->p_physical_device       = select_physical_device( *m_p_state->p_vk_instance );
-		m_p_state->queue_family_indices    = select_queue_family_indices( *m_p_state->p_physical_device, *m_p_state->p_window );
-		m_p_state->p_logical_device        = make_logical_device( *m_p_state->p_physical_device, m_p_state->queue_family_indices );
-		m_p_state->p_graphics_queue        = make_queue( *m_p_state->p_logical_device, m_p_state->queue_family_indices.graphics, 0 ); // NOTE: 0 since we
-		m_p_state->p_present_queue         = make_queue( *m_p_state->p_logical_device, m_p_state->queue_family_indices.present,  0 ); // only use 1 queue
-		m_p_state->p_command_pool          = make_command_pool( *m_p_state->p_logical_device, m_p_state->queue_family_indices.graphics );
-		make_swapchain( *m_p_state );
-		make_synch_primitives( *m_p_state ); // TODO: re-run whenever swapchain image count changes!
+		pState->p_physical_device       = select_physical_device( *pState->p_vk_instance );
+		pState->queue_family_indices    = select_queue_family_indices( *pState->p_physical_device, *pState->p_window );
+		pState->p_logical_device        = make_logical_device( *pState->p_physical_device, pState->queue_family_indices );
+		pState->p_graphics_queue        = make_queue( *pState->p_logical_device, pState->queue_family_indices.graphics, 0 ); // NOTE: 0 since we
+		pState->p_present_queue         = make_queue( *pState->p_logical_device, pState->queue_family_indices.present,  0 ); // only use 1 queue
+		pState->p_command_pool          = make_command_pool( *pState->p_logical_device, pState->queue_family_indices.graphics );
+		make_swapchain( *pState );
+		make_synch_primitives( *pState ); // TODO: re-run whenever swapchain image count changes!
    
 #if 0 // TODO:
 	// initialize a vk::RenderPassBeginInfo with the current imageIndex and some appropriate renderArea and clearValues
@@ -572,7 +554,7 @@ namespace gfx {
 	} // end-of-function: gfx::Renderer::Renderer
 	
 	Renderer::Renderer( Renderer &&other ) noexcept:
-		m_p_state      { std::move( other.m_p_state ) }
+		pState      { std::move( other.pState ) }
 	{
 		spdlog::info( "Moving a Renderer instance..." );
 	} // end-of-function: gfx::Renderer::Renderer
@@ -580,28 +562,28 @@ namespace gfx {
 	Renderer::~Renderer() noexcept
 	{
 		spdlog::info( "Destroying a Renderer instance..." );
-		m_p_state->p_logical_device->waitIdle();
-		if ( m_p_state and m_p_state->p_command_buffers )
-			m_p_state->p_command_buffers->clear();
+		pState->p_logical_device->waitIdle();
+		if ( pState and pState->p_command_buffers )
+			pState->p_command_buffers->clear();
 	} // end-of-function: gfx::Renderer::~Renderer
 	
 	[[nodiscard]] Window const &
 	Renderer::get_window() const
 	{
-		return *m_p_state->p_window;
+		return *pState->p_window;
 	} // end-of-function: gfx::Renderer::get_window
 	
 	[[nodiscard]] Window &
 	Renderer::get_window()
 	{
-		return *m_p_state->p_window;
+		return *pState->p_window;
 	} // end-of-function: gfx::Renderer::get_window
    
 	void
 	Renderer::operator()()
 	{
 		#define TIMEOUT 5000000 // TEMP! TODO // UINT64_MAX? (or limits)
-		auto const frame = m_p_state->frame_number++ % g_max_concurrent_frames;
+		auto const frame = pState->frame_number % g_max_concurrent_frames;
 //
 //		if ( m_p_state->p_logical_device->waitForFences(
 //				*(m_p_state->fences_in_flight[frame]),
@@ -618,9 +600,9 @@ namespace gfx {
 		vk::Result acquired_result;
 		try {
 			auto const [result, index] {
-				m_p_state->p_swapchain->access().acquireNextImage(
+				pState->p_swapchain->access().acquireNextImage(
 					TIMEOUT,
-					*(m_p_state->image_available[frame])
+					*(pState->image_available[frame])
 				)
 			};
 			acquired_index  = index;
@@ -657,15 +639,15 @@ namespace gfx {
 			vk::PipelineStageFlagBits::eColorAttachmentOutput
 		);
 		
-		m_p_state->p_graphics_queue->submit(
+		pState->p_graphics_queue->submit(
 			vk::SubmitInfo {
 				.waitSemaphoreCount   = 1,
-				.pWaitSemaphores      = &*m_p_state->image_available[acquired_index],
+				.pWaitSemaphores      = &*pState->image_available[acquired_index],
 				.pWaitDstStageMask    = &wait_destination_stage_mask,
 				.commandBufferCount   = 1,
-				.pCommandBuffers      = &*(*m_p_state->p_command_buffers)[acquired_index],
+				.pCommandBuffers      = &*(*pState->p_command_buffers)[acquired_index],
 				.signalSemaphoreCount = 1,
-				.pSignalSemaphores    = &*m_p_state->image_presentable[acquired_index], 
+				.pSignalSemaphores    = &*pState->image_presentable[acquired_index], 
 			} // `, *fence` here + wait loop later on VkSubpassDependency?
 		);
 //		
@@ -679,12 +661,12 @@ namespace gfx {
 //		
 		vk::Result present_result;
 		try {
-			present_result = m_p_state->p_present_queue->presentKHR(
+			present_result = pState->p_present_queue->presentKHR(
 				vk::PresentInfoKHR {
 					.waitSemaphoreCount = 1,
-					.pWaitSemaphores    = &*m_p_state->image_presentable[acquired_index],
+					.pWaitSemaphores    = &*pState->image_presentable[acquired_index],
 					.swapchainCount     = 1,
-					.pSwapchains        = &*(m_p_state->p_swapchain->access()),
+					.pSwapchains        = &*(pState->p_swapchain->access()),
 					.pImageIndices      = &acquired_index,
 				}
 			);
