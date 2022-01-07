@@ -1,61 +1,129 @@
 #include "MyTemplate/Renderer/Renderer.hpp"
-
+#include "MyTemplate/Renderer/common.hpp"	
 #include "MyTemplate/Renderer/GlfwInstance.hpp"
-#include "MyTemplate/Renderer/VkInstance.hpp"
 #include "MyTemplate/Renderer/Window.hpp"
-#include "MyTemplate/Renderer/Swapchain.hpp"
-#include "MyTemplate/Renderer/Pipeline.hpp"
-#include "MyTemplate/Renderer/Framebuffers.hpp"
 
 #include <spdlog/spdlog.h>
-#include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_raii.hpp>
 
 #include <ranges>
 #include <algorithm>
 #include <optional>
 #include <array>
 #include <vector>
+#include <set>
+#include <memory>
+#include <cassert>
 
 namespace gfx {	
-	struct Renderer::State final {
-		// NOTE: declaration order here is very important!
-		std::unique_ptr<GlfwInstance>                         pGlfwInstance     ;
-		std::unique_ptr<VkInstance>                           pVkInstance       ;
-		#if !defined( NDEBUG )
-			std::unique_ptr<vk::raii::DebugUtilsMessengerEXT>  pDebugMessenger   ; // TODO: refactor into own class?
-		#endif
-		std::unique_ptr<Window>                               pWindow           ;
-		std::unique_ptr<vk::raii::PhysicalDevice>             pPhysicalDevice   ; // TODO: refactor into LogicalDevice
-		QueueFamilyIndices                                    queueFamilies     ; // TODO: refactor into LogicalDevice
-		std::unique_ptr<vk::raii::Device>                     pDevice           ; // TODO: refactor into own class
-		std::unique_ptr<vk::raii::Queue>                      pGraphicsQueue    ;
-		std::unique_ptr<vk::raii::Queue>                      pPresentQueue     ;
-		std::unique_ptr<vk::raii::CommandPool>                pCommandPool      ;
-		// recreating part follows:
-		std::unique_ptr<Swapchain>                            pSwapchain        ;
-		std::unique_ptr<vk::raii::CommandBuffers>             pCommandBuffers   ; // NOTE: Must be deleted before command pool!
-		std::unique_ptr<Pipeline>                             pGraphicsPipeline ;
-		std::unique_ptr<Framebuffers>                         pFramebuffers     ; // NOTE: Must be deleted before swapchain!
-		bool                                                  bBadSwapchain     ;
-		// TODO: refactor into a struct of per-frame data (synchro, buffers, etc)
-		std::vector<vk::raii::Semaphore>                      imageAvailable    ; // synchronization
-		std::vector<vk::raii::Semaphore>                      imagePresentable  ; // synchronization
-		std::vector<vk::raii::Fence>                          images_in_flight  ; // synchronization
-		std::vector<vk::raii::Fence>                          fences_in_flight  ; // synchronization
-		u64                                                   currentFrame      ;
-	}; // end-of-struct: gfx::Renderer::State	
-	
 	namespace { // private (file-scope)
-		u32 constexpr gMaxConcurrentFrames { 2 }; // TODO: refactor
-		
-		// TODO: refactor out
-		std::array constexpr gRequiredDeviceExtensions {
-			VK_KHR_SWAPCHAIN_EXTENSION_NAME
+		// TODO: refactor
+		u32        constexpr gMaxConcurrentFrames        { 2 };
+		std::array constexpr gRequiredDeviceExtensions   { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+		std::array constexpr gRequiredValidationLayers   { "VK_LAYER_KHRONOS_validation"   };
+		std::array constexpr gRequiredInstanceExtensions {
+			#if !defined( NDEBUG )
+				VK_EXT_DEBUG_UTILS_EXTENSION_NAME ,
+				VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+			#endif
 		};
+	} // end-of-unnamed-namespace	
+	
+/////////////////////////////////////////////////////////////////////////////////////////////////
 		
-		[[nodiscard]] bool
-		meetsExtensionRequirements( vk::raii::PhysicalDevice const &physicalDevice )
+		
+		
+		// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
+		void Renderer::enableValidationLayers( vk::InstanceCreateInfo &createInfo )
+		{
+			spdlog::info( "... enabling validation layers:" );
+			
+			// pre-condition(s):
+			assert( mpVkContext != nullptr );
+			
+			auto const availableLayers { mpVkContext->enumerateInstanceLayerProperties() };
+			
+			// print all required and available layers:
+			for ( auto const &requiredLayer: gRequiredValidationLayers )
+				spdlog::info( "      required  : `{}`", requiredLayer );
+			for ( auto const &availableLayer: availableLayers )
+				spdlog::info( "      available : `{}`", availableLayer.layerName );
+			
+			// ensure that all required layers are available:
+			bool bIsMissingLayer { false };
+			for ( auto const &requiredLayer: gRequiredValidationLayers ) {
+				bool bFoundMatch { false };
+				for ( auto const &availableLayer: availableLayers ) {
+					if ( std::strcmp( requiredLayer, availableLayer.layerName ) == 0 ) [[unlikely]] {
+						bFoundMatch = true;
+						mValidationLayers.push_back( requiredLayer );
+						break;
+					}
+				}
+				if ( not bFoundMatch ) [[unlikely]] {
+					bIsMissingLayer = true;
+					spdlog::error( "    ! MISSING   : `{}`!", requiredLayer );
+				}
+			}
+			
+			// handle success or failure:
+			if ( bIsMissingLayer ) [[unlikely]]
+				throw std::runtime_error { "Failed to load required validation layers!" };
+		} // end-of-function: Renderer::enableValidationLayers
+		
+		
+		
+		// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
+		void Renderer::enableInstanceExtensions( vk::InstanceCreateInfo &createInfo )
+		{
+			spdlog::info( "... enabling instance extensions:" );
+			
+			// pre-condition(s):
+			assert( mpGlfwInstance != nullptr      );
+			assert( mpVkContext    != nullptr      );
+			assert( mInstanceExtensions.is_empty() ); // should be empty unless the function has been called multiple times (which it shouldn't)
+		
+			auto const availableExtensions    { mpVkContext->enumerateInstanceExtensionProperties() };
+			auto const glfwRequiredExtensions { mpGlfwInstance->getRequiredExtensions()             };
+			
+			// make a union of all instance extensions requirements:
+			std::set<char const *> allRequiredExtensions {};
+			for ( auto const &requiredExtension: glfwRequiredExtensions )
+				allRequiredExtensions.insert( requiredExtension );
+			for ( auto const &requiredExtension: gRequiredInstanceExtensions )
+				allRequiredExtensions.insert( requiredExtension );
+			
+			if constexpr ( gIsDebugMode ) {
+				// print required and available instance extensions:
+				for ( auto const &requiredExtension: allRequiredExtensions )
+					spdlog::info( "      required  : `{}`", requiredExtension );
+				for ( auto const &availableExtension: availableExtensions )
+					spdlog::info( "      available : `{}`", availableExtension.extensionName );
+			}
+			
+			// ensure required instance extensions are available:
+			bool bIsAdequate { true }; // assume true until proven otherwise
+			for ( auto const &requiredExtension: allRequiredExtensions ) {
+				bool bIsSupported { false }; // assume false until found
+				for ( auto const &availableExtension: availableExtensions ) {
+					if ( std::strcmp( requiredExtension, availableExtension.extensionName ) == 0 ) [[unlikely]] {
+						bIsSupported = true;
+						mInstanceExtensions.push_back( requiredExtension );
+						break; // early exit
+					}
+				}
+				if ( not bIsSupported ) [[unlikely]] {
+					bIsAdequate = false;
+					spdlog::error( "   ! MISSING   : `{}`", requiredExtension );
+				}
+			}
+			
+			if ( not bIsAdequate ) [[unlikely]]
+				throw std::runtime_error { "Failed to load required instance extensions!" };
+		} // end-of-function: Renderer::enableInstanceExtensions
+		
+		
+		
+		[[nodiscard]] bool Renderer::meetsDeviceExtensionRequirements( vk::raii::PhysicalDevice const &physicalDevice )
 		{
 			// NOTE: all extensions in this function are device extensions
 			auto const &availableExtensions { physicalDevice.enumerateDeviceExtensionProperties() };
@@ -70,7 +138,7 @@ namespace gfx {
 			}	
 			
 			bool bIsAdequate { true }; // assume true until proven otherwise
-			for ( auto const &requiredExtension: gRequiredDeviceExtensions ) {
+			for ( auto const &requiredExtension: gRequiredDeviceExtensions ) { // TODO: make gRequiredDeviceExtensions a member
 				bool bIsSupported { false }; // assume false until found
 				for ( auto const &availableExtension: availableExtensions ) {
 					if ( std::strcmp( requiredExtension, availableExtension.extensionName ) == 0 ) [[unlikely]] {
@@ -86,17 +154,18 @@ namespace gfx {
 					bIsAdequate = false;
 			}
 			return bIsAdequate;
-		} // end-of-function: gfx::<unnamed>::meetsExtensionRequirements
+		} // end-of-function: Renderer::meetsDeviceExtensionRequirements
 		
-		[[nodiscard]] u32
-		calculateScore( vk::raii::PhysicalDevice const &physicalDevice )
+		
+		
+		[[nodiscard]] u32 Renderer::calculateScore( vk::raii::PhysicalDevice const &physicalDevice )
 		{
 			auto const properties { physicalDevice.getProperties() }; // TODO: KHR2?
 			auto const features   { physicalDevice.getFeatures()   }; // TODO: 2KHR?
 			spdlog::info( "Scoring physical device `{}`...", properties.deviceName.data() );
 			u32 score { 0 };
 			
-			if ( not meetsExtensionRequirements( physicalDevice ) ) [[unlikely]]
+			if ( not meetsDeviceExtensionRequirements( physicalDevice ) ) [[unlikely]]
 				spdlog::info( "... device extension support: insufficient!" );
 			else if ( features.geometryShader == VK_FALSE ) [[unlikely]]
 				spdlog::info( "... geometry shader support: false" );
@@ -111,23 +180,29 @@ namespace gfx {
 				else [[unlikely]] {
 					spdlog::info( "... type: integrated" );
 				}
-				// TODO: add additional score factors later on (if needed)
+				// TODO: add additional score factors here later on (if needed)
 				spdlog::info( "... final score: {}", score );
 			}
 			return score;
-		} // end-of-function: gfx::<unnamed>::calculateScore
+		} // end-of-function: Renderer::calculateScore
 		
-		// NOTE: pre-conditions(s): `pContext` and `pVkInstance` are valid.
+		
+		
 		void Renderer::selectPhysicalDevice()
 		{
 			spdlog::info( "Selecting the most suitable physical device..." );
-			vk::raii::PhysicalDevices physicalDevices( pVkInstance );
+			
+			// pre-condition(s):
+			assert( mpVkContext  != nullptr );
+			assert( mpVkInstance != nullptr );
+			
+			vk::raii::PhysicalDevices physicalDevices( *mpVkInstance );
 			spdlog::info( "... found {} physical device(s)...", physicalDevices.size() );
 			if ( physicalDevices.empty() ) [[unlikely]]
 				throw std::runtime_error { "Unable to find any physical devices!" };
 			
-			auto *pBestMatch { &physicalDevices.front() };
-			auto  bestScore  {  score( *pBestMatch )    };
+			auto *pBestMatch { &physicalDevices.front()       };
+			auto  bestScore  {  calculateScore( *pBestMatch ) };
 			
 			for ( auto &currentPhysicalDevice: physicalDevices | std::views::drop(1) ) {
 				auto const score { calculateScore( currentPhysicalDevice ) };
@@ -142,11 +217,13 @@ namespace gfx {
 					"... selected physical device `{}` with a final score of: {}",
 					pBestMatch->getProperties().deviceName.data(), bestScore
 				);
-				pPhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>( std::move( *pBestMatch ) );
+				mpPhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>( std::move( *pBestMatch ) );
 			}
 			else [[unlikely]] throw std::runtime_error { "Physical device does not support swapchains!" };
 		} // end-of-function: Renderer::selectPhysicalDevice
 		
+		
+
 		#if !defined( NDEBUG )
 			VKAPI_ATTR VkBool32 VKAPI_CALL
 			debugCallback(
@@ -186,17 +263,21 @@ namespace gfx {
 				}
 				// TODO: expand with more info from pCallbackData
 				return false; // TODO: explain why
-			} // end-of-function: gfx::<unnamed>::debugCallback
+			} // end-of-function: Renderer::debugCallback
 		#endif	
 		
+		
+		
 		#if !defined( NDEBUG )
-			[[nodiscard]] auto
-			// NOTE: pre-conditions(s): `state.pContext` and `state.pVkInstance` are valid.
-			makeDebugMessenger( Render::State const &state )
+			void Renderer::makeDebugMessenger()
 			{
 				spdlog::info( "Creating debug messenger..." );
 				
-				auto const extensionProperties { pContext->enumerateInstanceExtensionProperties() };
+				// pre-condition(s):
+				assert( mpVkContext  != nullptr );
+				assert( mpVkInstance != nullptr );
+				
+				auto const extensionProperties { mpVkContext->enumerateInstanceExtensionProperties() };
 				
 				// look for debug utils extension:
 				auto const searchResultIterator {
@@ -222,68 +303,69 @@ namespace gfx {
 					vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
 				};
 				
-				return std::make_unique<vk::raii::DebugUtilsMessengerEXT>(
-					*pVkInstance,
+				mpDebugMessenger = std::make_unique<vk::raii::DebugUtilsMessengerEXT>(
+					*mpVkInstance,
 					vk::DebugUtilsMessengerCreateInfoEXT {
 						.messageSeverity =  severityFlags,
 						.messageType     =  typeFlags,
 						.pfnUserCallback = &debugCallback
 					}
 				);
-			} // end-of-function: gfx::<unnamed>::make_debug_messenger
+			} // end-of-function: Renderer::makeDebugMessenger
 		#endif
 		
-		[[nodiscard]] auto
-		select_queue_family_indices(
-			vk::raii::PhysicalDevice const &physical_device,
-			Window                   const &window
-		)
+		
+		
+		void Renderer::selectQueueFamilies()
 		{
-			std::optional<u32> maybe_present_index  {};
-			std::optional<u32> maybe_graphics_index {};
-			auto const &queue_family_properties {
-				physical_device.getQueueFamilyProperties()
-			};
+			spdlog::info( "Selecting queue families..." );				
+			
+			// pre-condition(s):
+			assert( mpWindow         != nullptr );
+			assert( mpPhysicalDevice != nullptr );
+			
+			std::optional<u32> maybePresentIndex  {};
+			std::optional<u32> maybeGraphicsIndex {};
+			auto const &queueFamilyProperties { mpPhysicalDevice->getQueueFamilyProperties() };
+			
 			spdlog::info( "Searching for graphics queue family..." );
-			for ( u32 index{0}; index<std::size(queue_family_properties); ++index ) {
-				bool const supports_graphics {
-					queue_family_properties[index].queueFlags & vk::QueueFlagBits::eGraphics
-				};
-				bool const supports_present {
-					physical_device.getSurfaceSupportKHR( index, *window.get_surface() ) == VK_TRUE
-				};
+			for ( u32 index{0};  index < queueFamilyProperties.size();  ++index ) {
+				bool const bSupportsGraphics { queueFamilyProperties[index].queueFlags & vk::QueueFlagBits::eGraphics };
+				bool const bSupportsPresent  { physical_device.getSurfaceSupportKHR( index, *mpWindow->get_surface() ) == VK_TRUE };
 				
 				spdlog::info( "... Evaluating queue family index {}:", index );
 				spdlog::info( "    ...  present support: {}", supports_present  ? "OK!" : "missing!" );
 				spdlog::info( "    ... graphics support: {}", supports_graphics ? "OK!" : "missing!" );
-				if ( supports_graphics and supports_present ) {
-					maybe_present_index  = index;
-					maybe_graphics_index = index;
+				if ( bSupportsGraphics and bSupportsPresent ) {
+					maybePresentIndex  = index;
+					maybeGraphicsIndex = index;
 					break;
 				}
-				else if ( supports_graphics )
-					maybe_graphics_index = index;
-				else if ( supports_present )
-					maybe_present_index = index;
+				else if ( bSupportsGraphics )
+					maybeGraphicsIndex = index;
+				else if ( bSupportsPresent )
+					maybePresentIndex  = index;
 			}
-			if ( maybe_present_index.has_value() and maybe_graphics_index.has_value() ) [[likely]] {
-				bool const are_separate {
-					maybe_present_index.value() != maybe_graphics_index.value()
-				};
-				if ( are_separate ) [[unlikely]]
+			
+			if ( maybePresentIndex.has_value() and maybeGraphicsIndex.has_value() ) [[likely]] {
+				bool const bAreSeparate { maybePresentIndex.value() != maybeGraphicsIndex.value() };
+				if ( bAreSeparate ) [[unlikely]]
 					spdlog::info( "... selected different queue families for graphics and present." );
 				else
 					spdlog::info( "... ideal queue family was found!" );
-				return QueueFamilyIndices {
+				
+				mQueueFamilies = QueueFamilyIndices {
 					.present      = maybe_present_index.value(),
 					.graphics     = maybe_graphics_index.value(),
 					.are_separate = are_separate
 				};
 			}
 			else [[unlikely]] throw std::runtime_error { "Queue family support for either graphics or present missing!" };
-		} // end-of-function: gfx::<unnamed>::select_queue_family_indices
+		} // end-of-function: Renderer::select_queue_family_indices
 		
-		[[nodiscard]] auto
+		
+		
+		[[nodiscard]] auto // CONTINUE HERE!! TODO TODO TODO TODO TODO TODO
 		make_logical_device(
 			vk::raii::PhysicalDevice const &physical_device,
 			QueueFamilyIndices       const &queue_family_indices
@@ -489,6 +571,33 @@ namespace gfx {
 	
 	Renderer::Renderer()
 	{
+		
+
+
+
+
+
+
+
+//instance
+			createInfo.enabledLayerCount       = static_cast<u32>( mValidationLayers.size() );
+			createInfo.ppEnabledLayerNames     = mValidationLayers.data();
+			createInfo.enabledExtensionCount   = static_cast<u32>( mInstanceExtensions.size() );
+			createInfo.ppEnabledExtensionNames = mInstanceExtensions.data();
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
 		// INIT:
 		//		Context
 		//		Instances

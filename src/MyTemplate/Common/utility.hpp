@@ -11,7 +11,7 @@
 #    error Unsupported compiler! //	inline void unreachable() {}
 # endif
 
-bool constexpr g_is_debug_mode {
+bool constexpr gIsDebugMode {
 	#if !defined( NDEBUG )
 		true
 	#else

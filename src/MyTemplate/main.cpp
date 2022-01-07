@@ -40,7 +40,7 @@ main()
 		MYTEMPLATE_VERSION_MAJOR, MYTEMPLATE_VERSION_MINOR, MYTEMPLATE_VERSION_PATCH
 	);
 	
-	if constexpr ( g_is_debug_mode ) {
+	if constexpr ( gIsDebugMode ) {
 		spdlog::set_level( spdlog::level::debug );
 		spdlog::info( "Build: DEBUG" );
 	}
