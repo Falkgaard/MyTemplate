@@ -2,30 +2,37 @@
 #ifndef WINDOW_HPP_ZGKG5SWR
 #define WINDOW_HPP_ZGKG5SWR
 
-#include "MyTemplate/Renderer/common.hpp"
 #include <memory>
+
+// forward declarations:
+class GLFWwindow;
+namespace vk::raii {
+	class Instance;
+	class SurfaceKHR;
+}
 
 namespace gfx {
 	class Window final {
 		public:
 			struct Dimensions final { int width, height; }; // TODO: refactor later
-			Window( GlfwInstance const &, VkInstance const &, bool &set_on_resize );
+			Window( GlfwInstance const &, vk::raii::Instance const &, bool &setOnResize );
 			Window(                ) = delete;
 			Window( Window const & ) = delete;
 			Window( Window &&      ) noexcept;
 			~Window()                noexcept;
 			// TODO: assignment operators?
-			[[nodiscard]] Dimensions                   get_dimensions() const;
-			[[nodiscard]] vk::raii::SurfaceKHR const & get_surface()    const;
-			[[nodiscard]] vk::raii::SurfaceKHR       & get_surface()         ;
-			[[nodiscard]] bool                         was_closed()     const;
-			void                                       update()              ;
-			void                                       wait_for_resize()     ;
+			[[nodiscard]] Dimensions                   getDimensions() const;
+			[[nodiscard]] vk::raii::SurfaceKHR const & getSurface()    const;
+			[[nodiscard]] vk::raii::SurfaceKHR       & getSurface()         ;
+			[[nodiscard]] bool                         wasClosed()     const;
+			void                                       update()             ;
+			void                                       waitResize()         ;
 		private:
-			GLFWwindow                            *m_p_window;
-			std::unique_ptr<vk::raii::SurfaceKHR>  m_p_surface;
-			bool                                  *m_p_set_on_resize;
-			static void on_resize_callback( GLFWwindow *, [[maybe_unused]] int width, [[maybe_unused]] int height );
+			static void onResizeCallback( GLFWwindow *, [[maybe_unused]] int width, [[maybe_unused]] int height );
+			
+			GLFWwindow                            *mpWindow;
+			std::unique_ptr<vk::raii::SurfaceKHR>  mpSurface;
+			bool                                  *mpSetOnResize;
 	}; // end-of-class: Window
 } // end-of-namespace: gfx
 

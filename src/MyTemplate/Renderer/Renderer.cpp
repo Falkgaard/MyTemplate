@@ -17,10 +17,12 @@
 namespace gfx {	
 	namespace { // private (file-scope)
 		// TODO(config): refactor
-		u32        constexpr gMaxConcurrentFrames        { 2 };
-		std::array constexpr gRequiredDeviceExtensions   { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-		std::array constexpr gRequiredValidationLayers   { "VK_LAYER_KHRONOS_validation"   };
-		std::array constexpr gRequiredInstanceExtensions {
+		u32                    constexpr gMaxConcurrentFrames        { 2 };
+		PresentationPriority   constexpr gPresentationPriority       { PresentationPriority::eMinimalStuttering };
+		FramebufferingPriority constexpr gFramebufferingPriority     { FramebufferingPriority::eTriple };
+		std::array             constexpr gRequiredDeviceExtensions   { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+		std::array             constexpr gRequiredValidationLayers   { "VK_LAYER_KHRONOS_validation" };
+		std::array             constexpr gRequiredInstanceExtensions {
 			#if !defined( NDEBUG )
 				VK_EXT_DEBUG_UTILS_EXTENSION_NAME ,
 				VK_EXT_DEBUG_REPORT_EXTENSION_NAME  // TODO: obsolete?
@@ -171,7 +173,7 @@ namespace gfx {
 		
 		
 		[[nodiscard]] bool
-		Renderer::meetsDeviceExtensionRequirements( vk::raii::PhysicalDevice const &physicalDevice )
+		Renderer::meetsDeviceExtensionRequirements( vk::raii::PhysicalDevice const &physicalDevice ) const
 		{
 			// NOTE: all extensions in this function are device extensions
 			auto const &availableExtensions { physicalDevice.enumerateDeviceExtensionProperties() };
@@ -196,9 +198,9 @@ namespace gfx {
 				}
 				spdlog::info(
 					"      support for required device extension `{}`: {}",
-					requiredExtension, bIsSupported ? "OK" : "missing!"
+					requiredExtension, isSupported ? "OK" : "missing!"
 				);
-				if ( not bIsSupported ) [[unlikely]]
+				if ( not isSupported ) [[unlikely]]
 					isAdequate = false;
 			}
 			return isAdequate;
@@ -207,7 +209,7 @@ namespace gfx {
 		
 		
 		[[nodiscard]] u32
-		Renderer::calculateScore( vk::raii::PhysicalDevice const &physicalDevice )
+		Renderer::calculateScore( vk::raii::PhysicalDevice const &physicalDevice ) const
 		{
 			spdlog::info( "Scoring physical device `{}`...", properties.deviceName.data() );
 			
@@ -277,6 +279,65 @@ namespace gfx {
 			else [[unlikely]]
 				throw std::runtime_error { "Physical device does not support swapchains!" };
 		} // end-of-function: Renderer::selectPhysicalDevice
+		
+		
+		
+		void
+		Renderer::makeVkContext()
+		{
+			spdlog::info( "Creating a Vulkan context..." );
+			
+			// pre-condition(s):
+			//   should be null unless the function has been called multiple times (which it shouldn't)
+			assert( mpVkContext == nullptr );
+			
+			mpVkContext = std::make_unique<vk::raii::Context>();
+		} // end-of-function: Renderer::makeVkContext
+		
+		
+		
+		void
+		Renderer::makeVkInstance()
+		{
+			spdlog::info( "Creating a Vulkan instance..." );
+			
+			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
+			assert( mpVkContext  != nullptr );		
+			//   should be null unless the function has been called multiple times (which it shouldn't)
+			assert( mpVkInstance == nullptr );
+			
+			// TODO: split engine/app versions and make customization point
+			// TODO: move into some ApplicationInfo class created in main?
+			auto const version {
+				VK_MAKE_VERSION(
+					MYTEMPLATE_VERSION_MAJOR,
+					MYTEMPLATE_VERSION_MINOR,
+					MYTEMPLATE_VERSION_PATCH
+				)
+			};
+			vk::ApplicationInfo const appInfo {
+				.pApplicationName   = "MyTemplate App", // TODO: make customization point 
+				.applicationVersion = version,          // TODO: make customization point 
+				.pEngineName        = "MyTemplate Engine",
+				.engineVersion      = version,
+				.apiVersion         = VK_API_VERSION_1_1
+			};
+			
+			enableValidationLayers();
+			enableInstanceExtensions();
+			
+			mpVkInstance = std::make_unique<vk::raii::Instance>(
+				*mpVkContext,
+				vk::InstanceCreateInfo {
+					.pApplicationInfo        = &appInfo,
+					.enabledLayerCount       = static_cast<u32>( mValidationLayers.size() ),
+					.ppEnabledLayerNames     = mValidationLayers.data(),
+					.enabledExtensionCount   = static_cast<u32>( mInstanceExtensions.size() ),
+					.ppEnabledExtensionNames = mInstanceExtensions.data(),
+				}
+			);
+		} // end-of-function: Renderer::makeVkInstance
 		
 		
 		
@@ -515,6 +576,211 @@ namespace gfx {
 		
 		
 		void
+		Renderer::selectSurfaceFormat()
+		{
+			spdlog::info( "Selecting swapchain surface format..." );
+				
+			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
+			assert( mpPhysicalDevice != nullptr );
+			assert( mpWindow         != nullptr );
+			
+			auto const availableSurfaceFormats {
+				physical_device.getSurfaceFormatsKHR( *mpWindow->getSurface() )
+			};
+			for ( auto const &surfaceFormat: availableSurfaceFormats ) {
+				if ( surfaceFormat.format     == vk::Format::eB8G8R8A8Srgb               // TODO: refactor out
+				and  surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) [[unlikely]] { // ^ ditto
+					spdlog::info(
+						"... selected surface format `{}` in color space `{}`",
+						to_string( surfaceFormat.format     ),
+						to_string( surfaceFormat.colorSpace )
+					);
+					mSurfaceFormat = surfaceFormat;
+					return;
+				}
+			}
+			// TODO: add contingency decisions to fallback on
+			throw std::runtime_error { "Unable to find the desired surface format!" };	
+		} // end-of-function: Renderer::selectSurfaceFormat
+		
+		
+		
+		void
+		Renderer::selectSurfaceExtent()
+		{
+			spdlog::info( "Selecting swapchain surface extent..." );
+				
+			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
+//			assert( mSurfaceCapabilities != ???     );
+			assert( mpWindow             != nullptr );
+			
+			vk::Extent2D result {};
+			if ( mSurfaceCapabilities.currentExtent.height == max<u32> ) // TODO: unlikely? likely?
+				result = mSurfaceCapabilities.currentExtent;
+			else {
+				auto [width, height] = mpWindow->getDimensions();
+				result.width =
+					std::clamp(
+						static_cast<u32>(width),
+						mSurfaceCapabilities.minImageExtent.width,
+						mSurfaceCapabilities.maxImageExtent.width
+					);
+				result.height =
+					std::clamp(
+						static_cast<u32>(height),
+						mSurfaceCapabilities.minImageExtent.height,
+						mSurfaceCapabilities.maxImageExtent.height
+					);
+			}
+			spdlog::info( "... selected swapchain extent: {}x{}", result.width, result.height );
+			return result;
+		} // end-of-function: Renderer::selectSurfaceExtent
+		
+		
+		
+		void
+		Renderer::selectPresentMode() noexcept
+		{
+			// TODO: add support for ordered priorities instead of just ideal/fallback.
+			spdlog::info( "Selecting swapchain present mode..." );
+				
+			// pre-condition(s):
+			//   shouldn't be null unless the function is called in the wrong order:
+			assert( mpPhysicalDevice != nullptr );
+			assert( mWindow          != nullptr );
+			
+			auto const windowSurface         { mpWindow->getSurface() };
+			auto const fallbackPresentMode   { vk::PresentModeKHR::eFifo };
+			auto const availablePresentModes { mpPhysicalDevice->getSurfacePresentModesKHR(*mSurface) };
+			auto const idealPresentMode {
+				[gPresentationPriority] {
+					switch ( gPresentationPriority ) {
+						case PresentationPriority::eMinimalLatency          : return vk::PresentModeKHR::eMailbox;
+						case PresentationPriority::eMinimalStuttering       : return vk::PresentModeKHR::eFifoRelaxed;
+						case PresentationPriority::eMinimalPowerConsumption : return vk::PresentModeKHR::eFifo;
+					}
+					unreachable();
+				}()
+			};
+			bool const hasSupportForIdealMode {
+				std::ranges::find( availablePresentModes, idealPresentMode ) != availablePresentModes.end()
+			};
+			if ( hasSupportForIdealMode ) [[likely]] {
+				spdlog::info(
+					"... ideal present mode `{}` is supported by device!",
+					to_string( idealPresentMode )
+				);
+				mPresentMode = idealPresentMode;
+			}
+			else [[unlikely]] {
+				spdlog::warn(
+					"... ideal present mode is not supported by device; using fallback present mode `{}`!",
+					to_string( fallbackPresentMode )
+				);
+				mPresentMode = fallbackPresentMode;
+			}
+		} // end-of-function: Renderer::selectPresentMode
+		
+		
+		
+		void
+		selectFramebufferCount() noexcept
+		{
+			// TODO: maybe add 1 to the ideal framebuffer count..?
+			spdlog::info( "Selecting swapchain framebuffer count..." );
+				
+			// pre-condition(s):
+			//   shouldn't be ??? unless the function is called in the wrong order:
+//			assert( mSurfaceCapabilities != ??? );
+			
+			auto const idealFramebufferCount { static_cast<u32>( gFramebufferingPriority ) };
+			spdlog::info( "... ideal framebuffer count: {}", idealFramebufferCount );
+			auto const minimumFramebufferCount { surface_capabilities.minImageCount };
+			auto const maximumFramebufferCount {
+				mSurfaceCapabilities.maxImageCount == 0 ? // handle special 0 (uncapped) case
+					idealFramebufferCount : mSurfaceCapabilities.maxImageCount
+			};
+			auto result {
+				std::clamp(
+					idealFramebufferCount,
+					minimumFramebufferCount,
+					maximumFramebufferCount
+				)
+			};
+			spdlog::info( "... nearest available framebuffer count: {}", result );
+			mFramebufferCount = result;
+		} // end-of-function: Renderer::selectFramebufferCount
+		
+		
+		
+		void
+		Renderer::makeSwapchain()
+		{
+			spdlog::info( "Constructing a Swapchain instance..." );
+			
+			// TODO(preconditions)
+			
+			mSurfaceCapabilities = mpPhysicalDevice->getSurfaceCapabilitiesKHR( *mpWindow->get_surface() ); // TODO(refactor)
+			selectSurfaceFormat();
+			selectSurfaceExtent();
+			selectPresentMode();
+			selectFramebufferCount();
+			
+			// temporary array:
+			u32 queueFamilyIndicesArray[] {
+				mQueueFamilyIndices.presentIndex,
+				mQueueFamilyIndices.graphicsIndex
+			};
+			// TODO: check present support	
+			mpSwapchain = std::make_unique<vk::raii::SwapchainKHR>(
+				**mpDevice,
+				vk::SwapchainCreateInfoKHR {
+					.surface               = *mpWindow->getSurface(),
+					.minImageCount         =  mFramebufferCount,
+					.imageFormat           =  mSurfaceFormat.format,     // TODO: config refactor
+					.imageColorSpace       =  mSurfaceFormat.colorSpace, // TODO: config refactor
+					.imageExtent           =  mSurfaceExtent,
+					.imageArrayLayers      =  1, // non-stereoscopic
+					.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // NOTE: change to eTransferDst if doing post-processing later
+					.imageSharingMode      =  mQueueFamilyIndices.areSeparate ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
+					.queueFamilyIndexCount =  mQueueFamilyIndices.areSeparate ?                           2u : 0u,
+					.pQueueFamilyIndices   =  mQueueFamilyIndices.areSeparate ?      queueFamilyIndicesArray : nullptr,
+					.preTransform          =  mSurfaceCapabilities.currentTransform,
+					.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
+					.presentMode           =  mPresentMode,
+					.clipped               =  VK_TRUE,
+					.oldSwapchain          =  VK_NULL_HANDLE // TODO: revisit later after implementing resizing
+				}
+			);
+			
+			// Image views: TODO(refactor)
+			spdlog::info( "Creating swapchain framebuffer image view(s)..." );
+			mImages = mpSwapchain->getImages();
+			mImageViews.reserve( mImages.size() );
+			for ( auto const &image: mImages ) {
+				mImageViews.emplace_back(
+					**mpDevice,
+					vk::ImageViewCreateInfo {
+						.image            = static_cast<vk::Image>( image ),
+						.viewType         = vk::ImageViewType::e2D,
+						.format           = mSurfaceFormat.format, // TODO: verify
+						.subresourceRange = vk::ImageSubresourceRange {
+						                     .aspectMask     = vk::ImageAspectFlagBits::eColor,
+						                     .baseMipLevel   = 0u,
+						                     .levelCount     = 1u,
+						                     .baseArrayLayer = 0u,
+						                     .layerCount     = 1u
+						                  }
+					}
+				);
+			}	
+		}
+		
+		
+		
+		void
 		Renderer::makeSyncPrimitives()
 		{
 			// TODO(refactor)
@@ -539,6 +805,7 @@ namespace gfx {
 		void
 		Renderer::makeSwapchain()
 		{
+			// TODO(cleanup): Might need to clean up mImageViews, mImages, mpCommandBuffers, mDescriptors, whatever here
 			// TODO(refactor)
 			spdlog::debug( "Creating swapchain and necessary state!" );
 			
@@ -637,10 +904,10 @@ namespace gfx {
 	{
 		spdlog::info( "Constructing a Renderer instance..." );
 		mpGlfwInstance = std::make_unique<GlfwInstance>();
-		mpVkContext    = std::make_unique<vk::raii::Context>();
-		makeInstance();
+		makeVkContext();
+		makeVkInstance();
 		maybeMakeDebugMessenger();
-		mpWindow       = std::make_unique<Window>( *mpGlfwInstance, *mpVkInstance );
+		mpWindow = std::make_unique<Window>( *mpGlfwInstance, *mpVkInstance );
 		selectPhysicalDevice();
 		selectQueueFamilies();
 		makeLogicalDevice();
@@ -650,10 +917,6 @@ namespace gfx {
 		makeSwapchain();
 		makeSyncPrimitives(); // TODO(config): refactor so it is updated whenever framebuffer count changes
 	//instance
-			createInfo.enabledLayerCount       = static_cast<u32>( mValidationLayers.size() );
-			createInfo.ppEnabledLayerNames     = mValidationLayers.data();
-			createInfo.enabledExtensionCount   = static_cast<u32>( mInstanceExtensions.size() );
-			createInfo.ppEnabledExtensionNames = mInstanceExtensions.data();
 	} // end-of-function: Renderer::Renderer
 	
 	

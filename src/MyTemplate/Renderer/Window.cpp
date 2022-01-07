@@ -9,14 +9,16 @@
 #include <utility>
 #include <stdexcept>
 
+// TODO: wrap mpWindow with a unique_ptr instead
+
 namespace gfx {
 	// NOTE: the GlfwInstance reference is just to ensure that GLFW is initialized
 	Window::Window(
 		[[maybe_unused]] GlfwInstance const &,
-		VkInstance                    const &vk_instance,
-		bool                                &set_on_resize
+		vk::raii::Instance            const &vkInstance,
+		bool                                &setOnResize
 	):
-		m_p_set_on_resize { &set_on_resize }
+		mpSetOnResize { &setOnResize }
 	{
 		spdlog::info( "Constructing a Window instance..." );
 		
@@ -25,98 +27,98 @@ namespace gfx {
 		
 		spdlog::info( "... creating GLFW window");
 		// TODO: refactor out construction args
-		m_p_window = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr );
-		VkSurfaceKHR surface_tmp;
+		mpWindow = glfwCreateWindow( 640, 480, "MyTemplate", nullptr, nullptr );
+		VkSurfaceKHR surfaceTemp;
 		
 		auto const result {
 			glfwCreateWindowSurface(
-				*vk_instance.get_instance(),
-				 m_p_window,
+				*vkInstance.get_instance(),
+				 mpWindow,
 				 nullptr,
-				&surface_tmp
+				&surfaceTemp
 			)
 		};
 		
 		if ( result != VkResult::VK_SUCCESS ) [[unlikely]]
 			throw std::runtime_error { "Unable to create GLFW window surface!" };
 		
-		m_p_surface = std::make_unique<vk::raii::SurfaceKHR>( vk_instance.get_instance(), surface_tmp );
+		mpSurface = std::make_unique<vk::raii::SurfaceKHR>( vkInstance, surfaceTemp );
 		
 		// setup callback(s):
-		glfwSetWindowUserPointer(  m_p_window, this );
-		glfwSetWindowSizeCallback( m_p_window, on_resize_callback );
-	}
+		glfwSetWindowUserPointer(  mpWindow, this );
+		glfwSetWindowSizeCallback( mpWindow, onResizeCallback );
+	} // end-of-function: Window::Window
 	
 	Window::Window( Window &&other ) noexcept:
-		m_p_surface       ( std::move( other.m_p_surface                    ) ),
-		m_p_window        ( std::exchange( other.m_p_window,        nullptr ) ), // TODO: verify
-		m_p_set_on_resize ( std::exchange( other.m_p_set_on_resize, nullptr ) )  // TODO: verify
+		mpSurface       ( std::move(     other.mpSurface              ) ),
+		mpWindow        ( std::exchange( other.mpWindow,      nullptr ) ), // TODO: verify
+		mpSet_on_resize ( std::exchange( other.mpSetOnResize, nullptr ) )  // TODO: verify
 	{
 		spdlog::info( "Moving a Window instance..." );
-	}
+	} // end-of-function: Window::Window
 	
 	Window::~Window() noexcept
 	{
 		spdlog::info( "Destroying a Window instance..." );
 		// NOTE: Vulkan-Hpp should take care of cleaning up the surface for us
-		if ( m_p_window ) [[likely]] {
+		if ( mpWindow ) [[likely]] {
 			spdlog::info( "... destroying GLFW window" );
-			glfwDestroyWindow( m_p_window );
+			glfwDestroyWindow( mpWindow );
 		}
-	}
+	} // end-of-function: Window::~Window
 	
 	[[nodiscard]] Window::Dimensions
-	Window::get_dimensions() const
+	Window::getDimensions() const
 	{
 		spdlog::debug( "Accessing window dimensions..." );
 		Dimensions dimensions;
-		glfwGetWindowSize( m_p_window, &dimensions.width, &dimensions.height );
+		glfwGetWindowSize( mpWindow, &dimensions.width, &dimensions.height );
 		return dimensions;
-	}
+	} // end-of-function: Window::getDimensions
 	
 	[[nodiscard]] vk::raii::SurfaceKHR const &
-	Window::get_surface() const
+	Window::getSurface() const
 	{
 		spdlog::debug( "Accessing window surface..." );
-		return *m_p_surface;
-	}
+		return *mpSurface;
+	} // end-of-function: Window::getSurface
 	
 	[[nodiscard]] vk::raii::SurfaceKHR &
-	Window::get_surface()
+	Window::getSurface()
 	{
 		spdlog::debug( "Accessing window surface..." );
-		return *m_p_surface;
-	}
+		return *mpSurface;
+	} // end-of-function: Window::getSurface
 	
 	[[nodiscard]] bool
-	Window::was_closed() const
+	Window::wasClosed() const
 	{
-		return glfwWindowShouldClose( m_p_window );
-	}
+		return glfwWindowShouldClose( mpWindow );
+	} // end-of-function: Window::wasClosed
 
 	void
 	Window::update()
 	{
-		glfwSwapBuffers( m_p_window );
+		glfwSwapBuffers( mpWindow );
 		glfwPollEvents(); // TODO: expose usage somehow
-	}
+	} // end-of-function: Window::update
 	
 	void
-	Window::wait_for_resize()
+	Window::waitResize()
 	{
 		i32 width  { 0 };
 		i32 height { 0 };
-		glfwGetFramebufferSize( m_p_window, &width, &height );
+		glfwGetFramebufferSize( mpWindow, &width, &height );
 		while ( width == 0 or height == 0 ) {
-		    glfwGetFramebufferSize( m_p_window, &width, &height );
+		    glfwGetFramebufferSize( mpWindow, &width, &height );
 		    glfwWaitEvents();
 		}
-	} // end-of-function: gfx::Window::wait_for_resize
+	} // end-of-function: Window::waitResize
 	
 	void
-	Window::on_resize_callback( GLFWwindow *p_window, [[maybe_unused]] int width, [[maybe_unused]] int height )
+	Window::onResizeCallback( GLFWwindow *pWindow, [[maybe_unused]] int width, [[maybe_unused]] int height )
 	{
-		*(static_cast<Window*>( glfwGetWindowUserPointer(p_window) )->m_p_set_on_resize) = true;
-	}
+		*(static_cast<Window*>( glfwGetWindowUserPointer(pWindow) )->mpSetOnResize) = true;
+	} // end-of-function: Window::onResizeCallback
 } // end-of-namespace: gfx
 // EOF

@@ -59,9 +59,9 @@
 	namespace gfx {
 		struct QueueFamilyIndices {
 			static inline u32 constexpr kUndefined { max<u32> };
-			u32  mPresentIndex  { undefined };
-			u32  mGraphicsIndex { undefined };
-			bool mbSeparate     { false     };
+			u32  mPresentIndex  { kUndefined };
+			u32  mGraphicsIndex { kUndefined };
+			bool mbSeparate     { false      };
 		}; // end-of-struct: gfx::QueueFamilyIndices
 	} // end-of-namespace: gfx
 

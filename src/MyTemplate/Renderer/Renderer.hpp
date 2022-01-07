@@ -2,7 +2,7 @@
 #ifndef RENDERER_HPP_YBLYHOXN
 #define RENDERER_HPP_YBLYHOXN
 
-#include "MyTemplate/Renderer/common.hpp"	
+#include "MyTemplate/Renderer/common.hpp"
 
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
@@ -29,6 +29,8 @@ namespace gfx {
 			void enableInstanceExtensions();
 			[[nodiscard]] bool meetsDeviceExtensionRequirements( vk::raii::PhysicalDevice const & ) const;
 			[[nodiscard]] u32  calculateScore(                   vk::raii::PhysicalDevice const & ) const;
+			void makeVkContext();
+			void makeVkInstance();
 			void selectPhysicalDevice();
 			void maybeMakeDebugMessenger();
 			void selectQueueFamilies();
@@ -39,9 +41,16 @@ namespace gfx {
 			void makeCommandPool();
 			[[nodiscard]] std::unique_ptr<vk::raii::CommandBuffers> makeCommandBuffers( vk::CommandBufferLevel const, u32 const bufferCount );
 			void makeSyncPrimitives();
+			void selectSurfaceFormat();
+			void selectSurfaceExtent();
+			void selectPresentMode() noexcept;
+			void selectFramebufferCount() noexcept;
 			void makeSwapchain();
-
+			
+			
+			
 			// NOTE: declaration order is very important here! (it dictates the order of destruction)
+			std::vector<char const *>                             mValidationLayers      ;
 			std::unique_ptr<GlfwInstance>                         mpGlfwInstance         ;
 			std::unique_ptr<vk::raii::Context>                    mpVkContext            ;
 			std::unique_ptr<vk::raii::Instance>                   mpVkInstance           ;
