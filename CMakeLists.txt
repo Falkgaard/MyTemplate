@@ -29,8 +29,6 @@ add_executable (
 	"src/${PROJECT_NAME}/Renderer/GlfwInstance.cpp"
 	"src/${PROJECT_NAME}/Renderer/Renderer.cpp"
 	"src/${PROJECT_NAME}/Renderer/Window.cpp"
-	"src/${PROJECT_NAME}/Renderer/Pipeline.cpp"
-	"src/${PROJECT_NAME}/Renderer/Framebuffers.cpp"
 )
 
 target_compile_definitions ( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS )
