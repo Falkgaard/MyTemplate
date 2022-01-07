@@ -16,16 +16,58 @@
 
 namespace gfx {	
 	namespace { // private (file-scope)
-		// TODO: refactor
+		// TODO(config): refactor
 		u32        constexpr gMaxConcurrentFrames        { 2 };
 		std::array constexpr gRequiredDeviceExtensions   { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 		std::array constexpr gRequiredValidationLayers   { "VK_LAYER_KHRONOS_validation"   };
 		std::array constexpr gRequiredInstanceExtensions {
 			#if !defined( NDEBUG )
 				VK_EXT_DEBUG_UTILS_EXTENSION_NAME ,
-				VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+				VK_EXT_DEBUG_REPORT_EXTENSION_NAME  // TODO: obsolete?
 			#endif
 		};
+		
+		#if !defined( NDEBUG )
+			VKAPI_ATTR VkBool32 VKAPI_CALL
+			debugCallback(
+				VkDebugUtilsMessageSeverityFlagBitsEXT      msgSeverity,
+				VkDebugUtilsMessageTypeFlagsEXT             msgType,
+				VkDebugUtilsMessengerCallbackDataEXT const *fpCallbackData,
+				void * // unused for now, TODO
+			)
+			{
+				// TODO: replace invocation duplication by using a function map?
+				auto const msgTypeName {
+					vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(msgType) )
+				};
+				auto const msgSeverityLevel {
+					static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(msgSeverity)
+				};
+				auto const  msgId      { fpCallbackData->messageIdNumber };
+				auto const &pMsgIdName { fpCallbackData->pMessageIdName  };
+				auto const &pMsg       { fpCallbackData->pMessage        };
+				switch (msgSeverityLevel) {
+					[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
+						spdlog::error( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
+						break;
+					}
+					[[likely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
+						spdlog::info( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
+						break;
+					}
+					case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: find a better fit?
+						spdlog::info( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
+						break;
+					}
+					[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
+						spdlog::warn( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
+						break;
+					}
+				}
+				// TODO: expand with more info from pCallbackData
+				return false; // TODO: explain why
+			} // end-of-function: debugCallback
+		#endif // end-of-debug-block
 	} // end-of-unnamed-namespace	
 	
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +76,7 @@ namespace gfx {
 		
 		// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
 		void
-		Renderer::enableValidationLayers( vk::InstanceCreateInfo &createInfo )
+		Renderer::enableValidationLayers()
 		{
 			spdlog::info( "... enabling validation layers:" );
 			
@@ -76,7 +118,7 @@ namespace gfx {
 		
 		// TODO: refactor common code shared by enableValidationLayers and enableInstanceExtensions.
 		void
-		Renderer::enableInstanceExtensions( vk::InstanceCreateInfo &createInfo )
+		Renderer::enableInstanceExtensions()
 		{
 			spdlog::info( "... enabling instance extensions:" );
 			
@@ -232,59 +274,16 @@ namespace gfx {
 				);
 				mpPhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>( std::move( *pBestMatch ) );
 			}
-			else [[unlikely]] throw std::runtime_error { "Physical device does not support swapchains!" };
+			else [[unlikely]]
+				throw std::runtime_error { "Physical device does not support swapchains!" };
 		} // end-of-function: Renderer::selectPhysicalDevice
 		
 		
-
-		#if !defined( NDEBUG )
-			VKAPI_ATTR VkBool32 VKAPI_CALL
-			Renderer::debugCallback(
-				VkDebugUtilsMessageSeverityFlagBitsEXT      msgSeverity,
-				VkDebugUtilsMessageTypeFlagsEXT             msgType,
-				VkDebugUtilsMessengerCallbackDataEXT const *fpCallbackData,
-				void * // unused for now, TODO
-			)
-			{
-				// TODO: replace invocation duplication by using a function map?
-				auto const msgTypeName {
-					vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(msgType) )
-				};
-				auto const msgSeverityLevel {
-					static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(msgSeverity)
-				};
-				auto const  msgId      { fpCallbackData->messageIdNumber };
-				auto const &pMsgIdName { fpCallbackData->pMessageIdName  };
-				auto const &pMsg       { fpCallbackData->pMessage        };
-				switch (msgSeverityLevel) {
-					[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
-						spdlog::error( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
-						break;
-					}
-					[[likely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
-						spdlog::info( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
-						break;
-					}
-					case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: find a better fit?
-						spdlog::info( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
-						break;
-					}
-					[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
-						spdlog::warn( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
-						break;
-					}
-				}
-				// TODO: expand with more info from pCallbackData
-				return false; // TODO: explain why
-			} // end-of-function: Renderer::debugCallback
-		#endif	
 		
-		
-		
-		#if !defined( NDEBUG )
-			void
-			Renderer::makeDebugMessenger()
-			{
+		void
+		Renderer::maybeMakeDebugMessenger()
+		{
+			#if !defined( NDEBUG )
 				spdlog::info( "Creating debug messenger..." );
 				
 				// pre-condition(s):
@@ -293,21 +292,6 @@ namespace gfx {
 				assert( mpVkInstance     != nullptr );
 				//   should be null unless the function has been called multiple times (which it shouldn't)
 				assert( mpDebugMessenger == nullptr );
-				
-				auto const extensionProperties { mpVkContext->enumerateInstanceExtensionProperties() };
-				
-				// look for debug utils extension:
-				auto const searchResultIterator {
-					std::find_if(
-						std::begin( extensionProperties ),
-						std::end(   extensionProperties ),
-						[]( auto const &extensionProperties ) {
-							return std::strcmp( extensionProperties.extensionName, VK_EXT_DEBUG_UTILS_EXTENSION_NAME ) == 0;
-						}
-					)
-				};
-				if ( searchResultIterator == std::end( extensionProperties ) ) [[unlikely]]
-					throw std::runtime_error { "Could not find " VK_EXT_DEBUG_UTILS_EXTENSION_NAME " extension!" };
 				
 				vk::DebugUtilsMessageSeverityFlagsEXT const severityFlags {
 					vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
@@ -328,8 +312,8 @@ namespace gfx {
 						.pfnUserCallback = &debugCallback
 					}
 				);
-			} // end-of-function: Renderer::makeDebugMessenger
-		#endif
+			#endif
+		} // end-of-function: Renderer::maybeMakeDebugMessenger
 		
 		
 		
@@ -380,7 +364,8 @@ namespace gfx {
 				else [[likely]]
 					spdlog::info( "... ideal queue family was found!" );
 			}
-			else [[unlikely]] throw std::runtime_error { "Queue family support for either graphics or present missing!" };
+			else [[unlikely]]
+				throw std::runtime_error { "Queue family support for either graphics or present missing!" };
 		} // end-of-function: Renderer::select_queue_family_indices
 		
 		
@@ -427,7 +412,7 @@ namespace gfx {
 				vk::DeviceCreateInfo {
 					.queueCreateInfoCount    = static_cast<u32>( createInfos.size() ),
 					.pQueueCreateInfos       = createInfos.data(),
-					.enabledLayerCount       = 0,       // no longer used; TODO: add conditionally to support older versions?
+					.enabledLayerCount       = 0,       // no longer used; TODO(support): add conditionally to support older versions?
 					.ppEnabledLayerNames     = nullptr, // ^ ditto
 					.enabledExtensionCount   = static_cast<u32>( gRequiredDeviceExtensions.size() ), // TODO?
 					.ppEnabledExtensionNames = gRequiredDeviceExtensions.data()                      // TODO?
@@ -438,8 +423,11 @@ namespace gfx {
 		
 		
 		// TODO: refactor away second arg and use automated tracking + exceptions
-		[[nodiscard]] auto
-		Renderer::makeQueue( u32 const queueFamilyIndex, u32 const queueIndex )
+		[[nodiscard]] std::unique_ptr<vk::raii::Queue>
+		Renderer::makeQueue(
+			u32 const queueFamilyIndex,
+			u32 const queueIndex
+		)
 		{
 			spdlog::info( "Creating handle for queue #{} of queue family #{}...", queueIndex, queueFamilyIndex );
 			
@@ -488,7 +476,7 @@ namespace gfx {
 			spdlog::info( "Creating command buffer pool..." );
 			
 			// pre-condition(s):
-			//   shouldn't be null and undefined unless the function is called in the wrong order:
+			//   shouldn't be null or undefined unless the function is called in the wrong order:
 			assert( mpGraphicsQueue                   != nullptr                        ); 
 			assert( mQueueFamilyIndices.graphicsIndex != QueueFamilyIndices::kUndefined ); 
 			//	  should be null unless the function has been called multiple times (which it shouldn't):
@@ -506,8 +494,8 @@ namespace gfx {
 		
 		
 		
-		[[nodiscard]] auto
-		makeCommandBuffers(
+		[[nodiscard]] std::unique_ptr<vk::raii::CommandBuffers>
+		Renderer::makeCommandBuffers(
 			vk::CommandBufferLevel const level,
 			u32                    const bufferCount
 		)
@@ -527,212 +515,148 @@ namespace gfx {
 		
 		
 		void
-		makeSyncPrimitives()
+		Renderer::makeSyncPrimitives()
 		{
 			// TODO(refactor)
 			spdlog::info( "Creating synchronization primitives..." );
-			state.imagePresentable .clear();
-			state.imageAvailable   .clear();
-			state.fences_in_flight  .clear();
-			state.images_in_flight  .clear();
-
-			state.imagePresentable .reserve( gMaxConcurrentFrames );
-			state.imageAvailable   .reserve( gMaxConcurrentFrames );
-			state.fences_in_flight  .reserve( gMaxConcurrentFrames );
-//			state.images_in_flight  .resize(
-//				state.p_swapchain->get_image_views().size() // one per frame
-//			);
-			for ( auto i{0}; i<gMaxConcurrentFrames; ++i ) {
-				state.imagePresentable .emplace_back( *state.pDevice, vk::SemaphoreCreateInfo {} );
-				state.imageAvailable   .emplace_back( *state.pDevice, vk::SemaphoreCreateInfo {} );
-				state.fences_in_flight  .emplace_back( *state.pDevice, vk::FenceCreateInfo     {} );
+			mImagePresentable .clear();
+			mImageAvailable   .clear();
+			mFencesInFlight   .clear();
+			mImagesInFlight   .clear();
+			mImagePresentable .reserve( gMaxConcurrentFrames );
+			mImageAvailable   .reserve( gMaxConcurrentFrames );
+			mFencesInFlight   .reserve( gMaxConcurrentFrames );
+//			mImagesInFlight   .resize(  mFramebufferCount    );
+			for ( auto i{0}; i < gMaxConcurrentFrames; ++i ) {
+				mImagePresentable .emplace_back( *mpDevice, vk::SemaphoreCreateInfo {} );
+				mImageAvailable   .emplace_back( *mpDevice, vk::SemaphoreCreateInfo {} );
+				mFencesInFlight   .emplace_back( *mpDevice, vk::FenceCreateInfo     {} );
 			}
-		} // end-of-function: gfx::<unnamed>::make_synch_primitives
+		} // end-of-function: Renderer::makeSyncPrimitives()
+		
+		
 		
 		void
-		make_swapchain( Renderer::State &state )
+		Renderer::makeSwapchain()
 		{
+			// TODO(refactor)
 			spdlog::debug( "Creating swapchain and necessary state!" );
 			
-			state.pWindow->wait_for_resize();
-			state.pDevice->waitIdle();
+			mpWindow->waitResize();
+			mpDevice->waitIdle();
 			
 			// delete previous state (if any) in the right order:
-			if ( state.pFramebuffers ) {
-				state.pFramebuffers.reset();
+			if ( mpFramebuffers ) {
+				mpFramebuffers.reset();
 			}
-			if ( state.pCommandBuffers ) {
-				state.pCommandBuffers->clear();
-				state.pCommandBuffers.reset();
+			if ( mpCommandBuffers ) {
+				mpCommandBuffers->clear();
+				mpCommandBuffers.reset();
 			}
-			if ( state.pGraphicsPipeline ) {
-				state.pGraphicsPipeline.reset();
+			if ( mpGraphicsPipeline ) {
+				mpGraphicsPipeline.reset();
 		   }
-			if ( state.pSwapchain ) {
-				state.pSwapchain.reset();
+			if ( mpSwapchain ) {
+				mpSwapchain.reset();
 			}
 			
-			state.pSwapchain = std::make_unique<Swapchain>(
-				*state.pPhysicalDevice,
-				*state.pDevice,
-				*state.pWindow,
-				 state.queueFamilies
+			// TODO(refactor)
+			mpSwapchain = std::make_unique<Swapchain>(
+				*mpPhysicalDevice,
+				*mpDevice,
+				*mpWindow,
+				 mQueueFamilies
 			);
 			
-			state.pGraphicsPipeline = std::make_unique<Pipeline>(
-				*state.pDevice,
-				*state.pSwapchain
+			mpGraphicsPipeline = std::make_unique<Pipeline>(
+				*mpDevice,
+				*mpSwapchain
 			);
 			
-			state.pFramebuffers = std::make_unique<Framebuffers>(
-				*state.pDevice,
-				*state.pSwapchain,
-				*state.pGraphicsPipeline
+			mpFramebuffers = std::make_unique<Framebuffers>(
+				*mpDevice,
+				*mpSwapchain,
+				*mpGraphicsPipeline
 			);
 			
-			state.pCommandBuffers = make_command_buffers(
-				state,
+			mpCommandBuffers = makeCommandBuffers(
 				vk::CommandBufferLevel::ePrimary,
-				state.pSwapchain->get_image_views().size() // one per framebuffer frame
+				mFramebufferCount
 			);
 			
 			// TODO: refactor
-			vk::ClearValue const clear_value {
-				.color = {{{ 0.02f, 0.02f, 0.02f, 1.0f }}}
-			};
+			vk::ClearValue const clearValue { .color = {{{ 0.02f, 0.02f, 0.02f, 1.0f }}} };
 			
-			for ( u32 index{0}; index < state.pSwapchain->get_image_views().size(); ++index ) {
-				auto &command_buffer = (*state.pCommandBuffers)[index];
-				command_buffer.begin( {} );
-				command_buffer.beginRenderPass(
+			for ( u32 index{0}; index < mFramebufferCount; ++index ) {
+				auto &commandBuffer = *mpCommandBuffers[index];
+				commandBuffer.begin( {} );
+				commandBuffer.beginRenderPass(
 					vk::RenderPassBeginInfo {
-						.renderPass      = *( state.pGraphicsPipeline->get_render_pass()   ),
-						.framebuffer     = *( state.pFramebuffers->access()[index] ),
+						.renderPass      = *mpRenderPass,
+						.framebuffer     = *mpFramebuffers[index],
 						.renderArea      = vk::Rect2D {
-						                    .extent = state.pSwapchain->get_surface_extent(),
+						                    .extent = mSurfaceExtent,
 						                 },
 						.clearValueCount =  1, // TODO: explain
-						.pClearValues    = &clear_value
+						.pClearValues    = &clearValue
 					},
-					vk::SubpassContents::eInline
+					vk::SubpassContents::eInline // inline; no secondary command buffers allowed
 				);
-				command_buffer.bindPipeline(
+				commandBuffer.bindPipeline(
 					vk::PipelineBindPoint::eGraphics,
-					*( state.pGraphicsPipeline->access() )
+					*mpGraphicsPipeline
 				);
-				//command_buffer.bindDescriptorSets()
-				//command_buffer.setViewport()
-				//command_buffer.setScissor()
-				command_buffer.draw(
+				// TODO(later): commandBuffer.bindDescriptorSets(
+				// TODO(later): 	vk::PipelineBindPoint::eGraphics,
+				// TODO(later): 	*pipelineLayout,
+				// TODO(later): 	0,
+				// TODO(later): 	{ *descriptorSet },
+				// TODO(later): 	nullptr
+				// TODO(later): );
+				// TODO(later): commandBuffer.bindVertexBuffers( 0, { *vertexBuffer }, { 0 } );
+				// NOTE(possibility): command_buffer.bindDescriptorSets()
+				// NOTE(possibility): command_buffer.setViewport()
+				// NOTE(possibility): command_buffer.setScissor()
+				commandBuffer.draw(
 					3, // vertex count
 					1, // instance count
 					0, // first vertex
 					0  // first instance
 				);
-				command_buffer.endRenderPass();
-				command_buffer.end();
+				commandBuffer.endRenderPass();
+				commandBuffer.end();
 			}
-		} // end-of-function: gfx::<unnamed>::recreate_swapchain
+		} // end-of-function: Renderer::createSwapchain
 	} // end-of-unnamed-namespace
 	
-	Renderer::Renderer()
+	
+	
+	Renderer::Renderer():
+		mShouldRemakeSwapchain { false },
+		mCurrentFrame          { 0     }
 	{
-		
-
-
-
-
-
-
-
-//instance
+		spdlog::info( "Constructing a Renderer instance..." );
+		mpGlfwInstance = std::make_unique<GlfwInstance>();
+		mpVkContext    = std::make_unique<vk::raii::Context>();
+		makeInstance();
+		maybeMakeDebugMessenger();
+		mpWindow       = std::make_unique<Window>( *mpGlfwInstance, *mpVkInstance );
+		selectPhysicalDevice();
+		selectQueueFamilies();
+		makeLogicalDevice();
+		makeGraphicsQueue();
+		makePresentQueue();
+		makeCommandPool();
+		makeSwapchain();
+		makeSyncPrimitives(); // TODO(config): refactor so it is updated whenever framebuffer count changes
+	//instance
 			createInfo.enabledLayerCount       = static_cast<u32>( mValidationLayers.size() );
 			createInfo.ppEnabledLayerNames     = mValidationLayers.data();
 			createInfo.enabledExtensionCount   = static_cast<u32>( mInstanceExtensions.size() );
 			createInfo.ppEnabledExtensionNames = mInstanceExtensions.data();
-
-
-
-
-
-
-
-
-
-
-
-
-
-		
-		// INIT:
-		//		Context
-		//		Instances
-		//		Window
-		//		PhysicalDevice
-		//		QueueFamilyIndices
-		//		LogicalDevice
-		//		Queues
-		//		CommandBufferPool
-		//	RECREATE:
-		//		Swapchain
-		//		ImageViews
-		//		RenderPass
-		//		GraphicsPipeline
-		//		CommandBuffers
-		spdlog::info( "Constructing a Renderer instance..." );
-		pState = std::make_unique<Renderer::State>();
-		pState->should_remake_swapchain = false;
-		pState->frame_number            = 0;
-		pState->p_glfw_instance         = std::make_unique<GlfwInstance>();
-		pState->p_vk_instance           = std::make_unique<VkInstance>( *pState->p_glfw_instance );
-		#if !defined( NDEBUG )
-		//	m_p_debug_messenger    = std::make_unique<DebugMessenger>( *m_p_vk_instance ); // TODO: make into its own class
-		#endif
-		pState->p_window                = std::make_unique<Window>( *pState->p_glfw_instance, *pState->p_vk_instance, pState->should_remake_swapchain );
-// TODO: refactor block below   
-		pState->p_physical_device       = select_physical_device( *pState->p_vk_instance );
-		pState->queue_family_indices    = select_queue_family_indices( *pState->p_physical_device, *pState->p_window );
-		pState->p_logical_device        = make_logical_device( *pState->p_physical_device, pState->queue_family_indices );
-		pState->p_graphics_queue        = make_queue( *pState->p_logical_device, pState->queue_family_indices.graphics, 0 ); // NOTE: 0 since we
-		pState->p_present_queue         = make_queue( *pState->p_logical_device, pState->queue_family_indices.present,  0 ); // only use 1 queue
-		pState->p_command_pool          = make_command_pool( *pState->p_logical_device, pState->queue_family_indices.graphics );
-		make_swapchain( *pState );
-		make_synch_primitives( *pState ); // TODO: re-run whenever swapchain image count changes!
-   
-#if 0 // TODO:
-	// initialize a vk::RenderPassBeginInfo with the current imageIndex and some appropriate renderArea and clearValues
-	vk::RenderPassBeginInfo renderPassBeginInfo( *renderPass, *framebuffers[imageIndex], renderArea, clearValues );
-
-	// begin the render pass with an inlined subpass; no secondary command buffers allowed
-	commandBuffer.beginRenderPass( renderPassBeginInfo, vk::SubpassContents::eInline );
-
-	// bind the graphics pipeline
-	commandBuffer.bindPipeline( vk::PipelineBindPoint::eGraphics, *graphicsPipeline );
-
-	// bind an appropriate descriptor set
-	commandBuffer.bindDescriptorSets( vk::PipelineBindPoint::eGraphics, *pipelineLayout, 0, { *descriptorSet }, nullptr );
-
-	// bind the vertex buffer
-	commandBuffer.bindVertexBuffers( 0, { *vertexBuffer }, { 0 } );
-
-	// set viewport and scissor
-	commandBuffer.setViewport( 0, viewport );
-	commandBuffer.setScissor( renderArea );
-
-	// draw the 12 * 3 vertices once, starting with vertex 0 and instance 0
-	commandBuffer.draw( 12 * 3, 1, 0, 0 );
-
-	// end the render pass and stop recording
-	commandBuffer.endRenderPass();
-	commandBuffer.end();
-#endif
-	} // end-of-function: gfx::Renderer::Renderer
+	} // end-of-function: Renderer::Renderer
 	
-	Renderer::Renderer( Renderer &&other ) noexcept:
-		pState      { std::move( other.pState ) }
-	{
-		spdlog::info( "Moving a Renderer instance..." );
-	} // end-of-function: gfx::Renderer::Renderer
+	
 	
 	Renderer::~Renderer() noexcept
 	{
@@ -740,25 +664,32 @@ namespace gfx {
 		pState->p_logical_device->waitIdle();
 		if ( pState and pState->p_command_buffers )
 			pState->p_command_buffers->clear();
-	} // end-of-function: gfx::Renderer::~Renderer
+	} // end-of-function: Renderer::~Renderer
+	
+	
 	
 	[[nodiscard]] Window const &
-	Renderer::get_window() const
+	Renderer::getWindow() const
 	{
-		return *pState->p_window;
-	} // end-of-function: gfx::Renderer::get_window
+		return *pWindow;
+	} // end-of-function: Renderer::getWindow
+	
+	
 	
 	[[nodiscard]] Window &
-	Renderer::get_window()
+	Renderer::getWindow()
 	{
-		return *pState->p_window;
-	} // end-of-function: gfx::Renderer::get_window
+		return *pWindow;
+	} // end-of-function: Renderer::getWindow
+	
+	
    
 	void
 	Renderer::operator()()
 	{
 		#define TIMEOUT 5000000 // TEMP! TODO // UINT64_MAX? (or limits)
-		auto const frame = pState->frame_number % g_max_concurrent_frames;
+		auto const frame = mCurrentFrame % gMaxConcurrentFrames;
+		++mCurrentFrame;
 //
 //		if ( m_p_state->p_logical_device->waitForFences(
 //				*(m_p_state->fences_in_flight[frame]),
@@ -771,19 +702,19 @@ namespace gfx {
 //			spdlog::warn( "Timeout in draw..." ); // TODO: better message
 //		}
 //		
-		u32        acquired_index;
-		vk::Result acquired_result;
+		u32        acquiredIndex;
+		vk::Result acquiredResult; // TODO: move inside?
 		try {
 			auto const [result, index] {
-				pState->p_swapchain->access().acquireNextImage(
+				mpSwapchain.acquireNextImage(
 					TIMEOUT,
-					*(pState->image_available[frame])
+					*mImageAvailable[frame]
 				)
 			};
-			acquired_index  = index;
-			acquired_result = result;
+			acquiredIndex  = index;
+			acquiredResult = result;
 		}
-		catch( vk::OutOfDateKHRError const &e ) {}
+		catch( vk::OutOfDateKHRError const & ) { /* do nothing */ }
 //      // vk::Result::eSuccess
 //      // vk::Result::eTimeout
 //      // vk::Result::eNotReady
@@ -810,19 +741,19 @@ namespace gfx {
 //			}
 //
 //		
-		vk::PipelineStageFlags const wait_destination_stage_mask(
+		vk::PipelineStageFlags const waitDestinationStageMask(
 			vk::PipelineStageFlagBits::eColorAttachmentOutput
 		);
 		
-		pState->p_graphics_queue->submit(
+		mpGraphicsQueue->submit(
 			vk::SubmitInfo {
 				.waitSemaphoreCount   = 1,
-				.pWaitSemaphores      = &*pState->image_available[acquired_index],
-				.pWaitDstStageMask    = &wait_destination_stage_mask,
+				.pWaitSemaphores      = &mImageAvailable[acquiredIndex],
+				.pWaitDstStageMask    = &waitDestinationStageMask,,
 				.commandBufferCount   = 1,
-				.pCommandBuffers      = &*(*pState->p_command_buffers)[acquired_index],
+				.pCommandBuffers      = &*(*mpCommandBuffers)[acquiredIndex],
 				.signalSemaphoreCount = 1,
-				.pSignalSemaphores    = &*pState->image_presentable[acquired_index], 
+				.pSignalSemaphores    = &*mImagePresentable[acquiredIndex], 
 			} // `, *fence` here + wait loop later on VkSubpassDependency?
 		);
 //		
@@ -834,20 +765,20 @@ namespace gfx {
 //			) == vk::Result::eTimeout
 //		);
 //		
-		vk::Result present_result;
+		vk::Result presentResult;
 		try {
-			present_result = pState->p_present_queue->presentKHR(
+			presentResult = mpPresentQueue->presentKHR(
 				vk::PresentInfoKHR {
 					.waitSemaphoreCount = 1,
-					.pWaitSemaphores    = &*pState->image_presentable[acquired_index],
+					.pWaitSemaphores    = &*mImagePresentable[acquiredIndex],
 					.swapchainCount     = 1,
-					.pSwapchains        = &*(pState->p_swapchain->access()),
-					.pImageIndices      = &acquired_index,
+					.pSwapchains        = &*(mpSwapchain),
+					.pImageIndices      = &acquiredIndex,
 				}
 			);
 		}
 		// TODO find a way to avoid try-catch here
-		catch ( vk::OutOfDateKHRError const &e) { /*do nothing*/ }
+		catch ( vk::OutOfDateKHRError const & ) { /* do nothing */ }
 //		
 //		if ( m_p_state->should_remake_swapchain
 //		or   present_result==vk::Result::eSuboptimalKHR
@@ -857,92 +788,9 @@ namespace gfx {
 //		}
 //		else if ( present_result != vk::Result::eSuccess )
 //			throw std::runtime_error { "Failed to present swapchain image!" };
-	} // end-of-function: gfx::Renderer::operator()
+	} // end-of-function: Renderer::operator()
 	
-#if 0 // OLD
-	void
-	Renderer::operator()()
-	{
-		#define TIMEOUT 5000 // TEMP! TODO
-		
-		vk::raii::Semaphore const image_acquired_semaphore(
-			*m_p_state->p_logical_device,
-			vk::SemaphoreCreateInfo{}
-		);
-		
-		u32        acquired_index;
-		vk::Result acquired_result;
-		try {
-			auto const [result, index] {
-				m_p_state->p_swapchain->access().acquireNextImage(
-					TIMEOUT,
-					*image_acquired_semaphore
-				)
-			};
-			acquired_index  = index;
-			acquired_result = result;
-		}
-		catch( vk::OutOfDateKHRError const &e ) {}
-      // vk::Result::eSuccess
-      // vk::Result::eTimeout
-      // vk::Result::eNotReady
-      // vk::Result::eSuboptimalKHR
-		
-		if ( acquired_result == vk::Result::eSuboptimalKHR
-		or   acquired_result == vk::Result::eErrorOutOfDateKHR ) {
-			make_swapchain( *m_p_state );
-			return;
-		}
-		else if ( acquired_result != vk::Result::eSuccess)
-			throw std::runtime_error { "Failed to acquire swapchain image!" };
-		
-		vk::raii::Fence const fence( *m_p_state->p_logical_device, vk::FenceCreateInfo{} );
-		
-		vk::PipelineStageFlags const wait_destination_stage_mask(
-			vk::PipelineStageFlagBits::eColorAttachmentOutput
-		);
-		
-		m_p_state->p_graphics_queue->submit(
-			vk::SubmitInfo {
-				.pWaitDstStageMask  = &wait_destination_stage_mask,
-				.commandBufferCount =  1,
-				.pCommandBuffers    = &*(*m_p_state->p_command_buffers)[acquired_index],
-				.pSignalSemaphores  = &*image_acquired_semaphore
-			},
-			*fence
-		);
-		
-		while (
-			m_p_state->p_logical_device->waitForFences(
-				{ *fence },
-				VK_TRUE,
-				TIMEOUT
-			) == vk::Result::eTimeout
-		);
-		
-		vk::Result present_result;
-		try {
-			present_result = m_p_state->p_present_queue->presentKHR(
-				vk::PresentInfoKHR {
-					.waitSemaphoreCount = 0,
-					.pWaitSemaphores    = nullptr, // TODO: comment
-					.swapchainCount     = 1,
-					.pSwapchains        = &*(m_p_state->p_swapchain->access()),
-					.pImageIndices      = &acquired_index,
-				}
-			);
-		}
-		catch ( vk::OutOfDateKHRError const &e) {}
-		
-		if ( m_p_state->should_remake_swapchain
-		or   present_result==vk::Result::eSuboptimalKHR
-		or   present_result==vk::Result::eErrorOutOfDateKHR ) {
-			m_p_state->should_remake_swapchain = false;
-			make_swapchain( *m_p_state );
-		}
-		else if ( present_result != vk::Result::eSuccess )
-			throw std::runtime_error { "Failed to present swapchain image!" };
-	} // end-of-function: gfx::Renderer::operator()
-#endif // end OLD
+	
+	
 } // end-of-namespace: gfx
 // EOF

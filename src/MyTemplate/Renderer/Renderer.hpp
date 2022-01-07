@@ -14,25 +14,33 @@ namespace gfx {
 	class Renderer final {
 		public:
 			Renderer();
-			Renderer( Renderer const & )                 = delete;
-			Renderer & operator=( Renderer const &  )    = delete;
-			Renderer( Renderer && ) noexcept             = default;
-			~Renderer() noexcept                         = default;
-			Renderer & operator=( Renderer && ) noexcept = default;
+			~Renderer() noexcept;
+			Renderer(             Renderer const &  )          = delete;
+			Renderer(             Renderer       && ) noexcept = default;
+			Renderer & operator=( Renderer const &  )          = delete;
+			Renderer & operator=( Renderer       && ) noexcept = default;
 			
-			[[nodiscard]] Window const & get_window() const;
-			[[nodiscard]] Window       & get_window();
+			[[nodiscard]] Window const & getWindow() const;
+			[[nodiscard]] Window       & getWindow();
 			void operator()(); // renders
 			
 		private:
-			void enableValidationLayers( vk::InstanceCreateInfo & );
-			
-			
-			
-			
-			
-			
-			
+			void enableValidationLayers();
+			void enableInstanceExtensions();
+			[[nodiscard]] bool meetsDeviceExtensionRequirements( vk::raii::PhysicalDevice const & ) const;
+			[[nodiscard]] u32  calculateScore(                   vk::raii::PhysicalDevice const & ) const;
+			void selectPhysicalDevice();
+			void maybeMakeDebugMessenger();
+			void selectQueueFamilies();
+			void makeLogicalDevice();
+			[[nodiscard]] std::unique_ptr<vk::raii::Queue> makeQueue( u32 const queueFamilyIndex, u32 const queueIndex );
+			void makeGraphicsQueue();
+			void makePresentQueue();
+			void makeCommandPool();
+			[[nodiscard]] std::unique_ptr<vk::raii::CommandBuffers> makeCommandBuffers( vk::CommandBufferLevel const, u32 const bufferCount );
+			void makeSyncPrimitives();
+			void makeSwapchain();
+
 			// NOTE: declaration order is very important here! (it dictates the order of destruction)
 			std::unique_ptr<GlfwInstance>                         mpGlfwInstance         ;
 			std::unique_ptr<vk::raii::Context>                    mpVkContext            ;
@@ -63,7 +71,7 @@ namespace gfx {
 			std::unique_ptr<vk::raii::RenderPass>                 mpRenderPass           ;
 			std::unique_ptr<vk::raii::Pipeline>                   mpGraphicsPipeline     ;
 			std::vector<vk::raii::Framebuffer>                    mFramebuffers          ; // NOTE: Must be deleted before swapchain!
-			bool                                                  mbBadSwapchain         ;
+			bool                                                  mShouldRemakeSwapchain ;
 			std::vector<vk::raii::Semaphore>                      mImageAvailable        ;
 			std::vector<vk::raii::Semaphore>                      mImagePresentable      ;
 			std::vector<vk::raii::Fence>                          mImagesInFlight        ; // TODO: better names
