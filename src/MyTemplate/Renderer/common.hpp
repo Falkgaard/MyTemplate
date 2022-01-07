@@ -57,11 +57,11 @@
 
 // POD structs:
 	namespace gfx {
-		// NOTE: value corresponds to number of frames to allow for static casting
 		struct QueueFamilyIndices {
-			u32  present      ;
-			u32  graphics     ;
-			bool are_separate ;
+			static inline u32 constexpr kUndefined { max<u32> };
+			u32  mPresentIndex  { undefined };
+			u32  mGraphicsIndex { undefined };
+			bool mbSeparate     { false     };
 		}; // end-of-struct: gfx::QueueFamilyIndices
 	} // end-of-namespace: gfx
 

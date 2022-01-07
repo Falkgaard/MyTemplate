@@ -19,5 +19,14 @@ bool constexpr gIsDebugMode {
 	#endif
 };
 
+#include <limits>
+#include <concepts>
+
+template <typename T> requires std::integral<T> or std::floating_point<T>
+auto constexpr max { return std::numeric_limits<T>::max(); }
+
+template <typename T> requires std::integral<T> or std::floating_point<T>
+auto constexpr min { return std::numeric_limits<T>::min(); }
+
 #endif // end-of-header-guard UTILITY_HPP_43ER7VL9
 // EOF

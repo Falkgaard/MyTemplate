@@ -49,24 +49,24 @@ namespace gfx {
 				spdlog::info( "      available : `{}`", availableLayer.layerName );
 			
 			// ensure that all required layers are available:
-			bool bIsMissingLayer { false };
+			bool isMissingLayer { false };
 			for ( auto const &requiredLayer: gRequiredValidationLayers ) {
-				bool bFoundMatch { false };
+				bool foundMatch { false };
 				for ( auto const &availableLayer: availableLayers ) {
 					if ( std::strcmp( requiredLayer, availableLayer.layerName ) == 0 ) [[unlikely]] {
-						bFoundMatch = true;
+						foundMatch = true;
 						mValidationLayers.push_back( requiredLayer );
 						break;
 					}
 				}
-				if ( not bFoundMatch ) [[unlikely]] {
-					bIsMissingLayer = true;
+				if ( not foundMatch ) [[unlikely]] {
+					isMissingLayer = true;
 					spdlog::error( "    ! MISSING   : `{}`!", requiredLayer );
 				}
 			}
 			
 			// handle success or failure:
-			if ( bIsMissingLayer ) [[unlikely]]
+			if ( isMissingLayer ) [[unlikely]]
 				throw std::runtime_error { "Failed to load required validation layers!" };
 		} // end-of-function: Renderer::enableValidationLayers
 		
@@ -101,23 +101,23 @@ namespace gfx {
 			}
 			
 			// ensure required instance extensions are available:
-			bool bIsAdequate { true }; // assume true until proven otherwise
+			bool isAdequate { true }; // assume true until proven otherwise
 			for ( auto const &requiredExtension: allRequiredExtensions ) {
-				bool bIsSupported { false }; // assume false until found
+				bool isSupported { false }; // assume false until found
 				for ( auto const &availableExtension: availableExtensions ) {
 					if ( std::strcmp( requiredExtension, availableExtension.extensionName ) == 0 ) [[unlikely]] {
-						bIsSupported = true;
+						isSupported = true;
 						mInstanceExtensions.push_back( requiredExtension );
 						break; // early exit
 					}
 				}
-				if ( not bIsSupported ) [[unlikely]] {
-					bIsAdequate = false;
+				if ( not isSupported ) [[unlikely]] {
+					isAdequate = false;
 					spdlog::error( "   ! MISSING   : `{}`", requiredExtension );
 				}
 			}
 			
-			if ( not bIsAdequate ) [[unlikely]]
+			if ( not isAdequate ) [[unlikely]]
 				throw std::runtime_error { "Failed to load required instance extensions!" };
 		} // end-of-function: Renderer::enableInstanceExtensions
 		
@@ -137,12 +137,12 @@ namespace gfx {
 					spdlog::info( "      available : `{}`", availableExtension.extensionName );
 			}	
 			
-			bool bIsAdequate { true }; // assume true until proven otherwise
+			bool isAdequate { true }; // assume true until proven otherwise
 			for ( auto const &requiredExtension: gRequiredDeviceExtensions ) { // TODO: make gRequiredDeviceExtensions a member
-				bool bIsSupported { false }; // assume false until found
+				bool isSupported { false }; // assume false until found
 				for ( auto const &availableExtension: availableExtensions ) {
 					if ( std::strcmp( requiredExtension, availableExtension.extensionName ) == 0 ) [[unlikely]] {
-						bIsSupported = true;
+						isSupported = true;
 						break; // early exit
 					}
 				}
@@ -151,9 +151,9 @@ namespace gfx {
 					requiredExtension, bIsSupported ? "OK" : "missing!"
 				);
 				if ( not bIsSupported ) [[unlikely]]
-					bIsAdequate = false;
+					isAdequate = false;
 			}
-			return bIsAdequate;
+			return isAdequate;
 		} // end-of-function: Renderer::meetsDeviceExtensionRequirements
 		
 		
@@ -330,69 +330,69 @@ namespace gfx {
 			
 			spdlog::info( "Searching for graphics queue family..." );
 			for ( u32 index{0};  index < queueFamilyProperties.size();  ++index ) {
-				bool const bSupportsGraphics { queueFamilyProperties[index].queueFlags & vk::QueueFlagBits::eGraphics };
-				bool const bSupportsPresent  { physical_device.getSurfaceSupportKHR( index, *mpWindow->get_surface() ) == VK_TRUE };
+				bool const supportsGraphics { queueFamilyProperties[index].queueFlags & vk::QueueFlagBits::eGraphics };
+				bool const supportsPresent  { physical_device.getSurfaceSupportKHR( index, *mpWindow->get_surface() ) == VK_TRUE };
 				
 				spdlog::info( "... Evaluating queue family index {}:", index );
-				spdlog::info( "    ...  present support: {}", supports_present  ? "OK!" : "missing!" );
-				spdlog::info( "    ... graphics support: {}", supports_graphics ? "OK!" : "missing!" );
-				if ( bSupportsGraphics and bSupportsPresent ) {
+				spdlog::info( "    ...  present support: {}", supportsPresent  ? "OK!" : "missing!" );
+				spdlog::info( "    ... graphics support: {}", supportsGraphics ? "OK!" : "missing!" );
+				if ( supportsGraphics and supportsPresent ) {
 					maybePresentIndex  = index;
 					maybeGraphicsIndex = index;
 					break;
 				}
-				else if ( bSupportsGraphics )
+				else if ( supportsGraphics )
 					maybeGraphicsIndex = index;
-				else if ( bSupportsPresent )
+				else if ( supportsPresent )
 					maybePresentIndex  = index;
 			}
 			
 			if ( maybePresentIndex.has_value() and maybeGraphicsIndex.has_value() ) [[likely]] {
-				bool const bAreSeparate { maybePresentIndex.value() != maybeGraphicsIndex.value() };
-				if ( bAreSeparate ) [[unlikely]]
-					spdlog::info( "... selected different queue families for graphics and present." );
-				else
-					spdlog::info( "... ideal queue family was found!" );
-				
 				mQueueFamilies = QueueFamilyIndices {
-					.present      = maybe_present_index.value(),
-					.graphics     = maybe_graphics_index.value(),
-					.are_separate = are_separate
+					.presentIndex  = maybePresentIndex.value(),
+					.graphicsIndex = maybeGraphicsIndex.value(),
+					.areSeparate   = maybePresentIndex.value() != maybeGraphicsIndex.value()
 				};
+				if ( mQueueFamilyIndices.areSeparate ) [[unlikely]]
+					spdlog::info( "... selected different queue families for graphics and present." );
+				else [[likely]]
+					spdlog::info( "... ideal queue family was found!" );
 			}
 			else [[unlikely]] throw std::runtime_error { "Queue family support for either graphics or present missing!" };
 		} // end-of-function: Renderer::select_queue_family_indices
 		
 		
 		
-		[[nodiscard]] auto // CONTINUE HERE!! TODO TODO TODO TODO TODO TODO
-		make_logical_device(
-			vk::raii::PhysicalDevice const &physical_device,
-			QueueFamilyIndices       const &queue_family_indices
-		)
+		void
+		Renderer::makeLogicalDevice()
 		{
 			spdlog::info( "Creating logical device..." );
 			
+			// pre-condition(s):
+			assert( mQueueFamilyIndices.presentIndex  != QueueFamilyIndices::kUndefined );
+			assert( mQueueFamilyIndices.graphicsIndex != QueueFamilyIndices::kUndefined );
+			assert( mpPhysicalDevice                  != nullptr                        );
+			
 			// TODO: refactor approach when more queues are needed
-			std::vector<vk::DeviceQueueCreateInfo> queue_create_infos {};
+			std::vector<vk::DeviceQueueCreateInfo> createInfos {};
 			
-			f32 const present_queue_priority  { 1.0f }; // TODO: verify value
-			f32 const graphics_queue_priority { 1.0f }; // TODO: verify value
+			f32 const presentQueuePriority  { 1.0f }; // TODO: verify value
+			f32 const graphicsQueuePriority { 1.0f }; // TODO: verify value
 			
-			queue_create_infos.push_back(
+			createInfos.push_back(
 				vk::DeviceQueueCreateInfo {
-					.queueFamilyIndex =  queue_family_indices.present,
+					.queueFamilyIndex =  mQueueFamilies.presentIndex
 					.queueCount       =  1,
-					.pQueuePriorities = &present_queue_priority
+					.pQueuePriorities = &presentQueuePriority
 				}
 			);
 			
-			if ( queue_family_indices.are_separate ) [[unlikely]] {
-				queue_create_infos.push_back(
+			if ( mQueueFamilies.areSeparate ) [[unlikely]] {
+				createInfos.push_back(
 					vk::DeviceQueueCreateInfo {
-						.queueFamilyIndex =  queue_family_indices.graphics,
+						.queueFamilyIndex =  mQueueFamilies.graphicsIndex,
 						.queueCount       =  1,
-						.pQueuePriorities = &graphics_queue_priority
+						.pQueuePriorities = &graphicsQueuePriority
 					}
 				);
 			}
@@ -400,15 +400,15 @@ namespace gfx {
 			return std::make_unique<vk::raii::Device>(
 				physical_device,
 				vk::DeviceCreateInfo {
-					.queueCreateInfoCount    = static_cast<u32>( queue_create_infos.size() ),
-					.pQueueCreateInfos       = queue_create_infos.data(),
+					.queueCreateInfoCount    = static_cast<u32>( createInfos.size() ),
+					.pQueueCreateInfos       = createInfos.data(),
 					.enabledLayerCount       = 0,       // no longer used; TODO: add conditionally to support older versions?
 					.ppEnabledLayerNames     = nullptr, // ^ ditto
-					.enabledExtensionCount   = static_cast<u32>( gRequiredDeviceExtensions.size() ),
-					.ppEnabledExtensionNames = gRequiredDeviceExtensions.data()
+					.enabledExtensionCount   = static_cast<u32>( gRequiredDeviceExtensions.size() ), // TODO?
+					.ppEnabledExtensionNames = gRequiredDeviceExtensions.data()                      // TODO?
 				}
 			);
-		} // end-of-function: gfx::<unnamed>::make_logical_device
+		} // end-of-function: Renderer::makeLogicalDevice
 		
 		[[nodiscard]] auto
 		make_queue(
