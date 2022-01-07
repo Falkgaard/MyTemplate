@@ -1,11 +1,14 @@
 #include "MyTemplate/Renderer/Window.hpp"
-
-#include "MyTemplate/Renderer/VkInstance.hpp"
 #include "MyTemplate/Renderer/GlfwInstance.hpp"
+#include "MyTemplate/Common/aliases.hpp"
+
 #include <spdlog/spdlog.h>
+
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
+
 #include <GLFW/glfw3.h>
+
 #include <utility>
 #include <stdexcept>
 
@@ -32,7 +35,7 @@ namespace gfx {
 		
 		auto const result {
 			glfwCreateWindowSurface(
-				*vkInstance.get_instance(),
+				*vkInstance,
 				 mpWindow,
 				 nullptr,
 				&surfaceTemp
@@ -50,9 +53,9 @@ namespace gfx {
 	} // end-of-function: Window::Window
 	
 	Window::Window( Window &&other ) noexcept:
-		mpSurface       ( std::move(     other.mpSurface              ) ),
-		mpWindow        ( std::exchange( other.mpWindow,      nullptr ) ), // TODO: verify
-		mpSet_on_resize ( std::exchange( other.mpSetOnResize, nullptr ) )  // TODO: verify
+		mpSurface     ( std::move(     other.mpSurface              ) ),
+		mpWindow      ( std::exchange( other.mpWindow,      nullptr ) ), // TODO: verify
+		mpSetOnResize ( std::exchange( other.mpSetOnResize, nullptr ) )  // TODO: verify
 	{
 		spdlog::info( "Moving a Window instance..." );
 	} // end-of-function: Window::Window

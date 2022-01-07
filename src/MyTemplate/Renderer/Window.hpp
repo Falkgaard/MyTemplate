@@ -6,6 +6,9 @@
 
 // forward declarations:
 class GLFWwindow;
+namespace gfx {
+	class GlfwInstance;
+}
 namespace vk::raii {
 	class Instance;
 	class SurfaceKHR;

@@ -3,17 +3,16 @@
 #define GLFWINSTANCE_HPP_AU0HO3FK
 
 #include <span>
-#include "MyTemplate/Renderer/common.hpp"
 
 namespace gfx {
 	class GlfwInstance final {
 		public:
 			GlfwInstance();
 			GlfwInstance( GlfwInstance const &  );
-			GlfwInstance( GlfwInstance       && ) noexcept;
+			GlfwInstance( GlfwInstance       && ) noexcept = default;
 			~GlfwInstance() noexcept;
 			// TODO: assignment ops?
-			[[nodiscard]] std::span<char const *> get_required_extensions() const;
+			[[nodiscard]] std::span<char const *> getRequiredExtensions() const;
 	}; // end-of-class: GlfwInstance
 } // end-of-namespace: gfx
 

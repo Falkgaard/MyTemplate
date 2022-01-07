@@ -44,20 +44,20 @@ namespace gfx {
 			void selectSurfaceExtent();
 			void selectPresentMode() noexcept;
 			void selectFramebufferCount() noexcept;
+			void generateDynamicState();
 			void makeSwapchain();
 			[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule> makeShaderModuleFromBinary( std::vector<char> const &shaderBinary ) const;;
 			[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule> makeShaderModuleFromFile( std::string const &shaderSpirvBytecodeFilename ) const;
 			void makeGraphicsPipelineLayout();
 			void makeRenderPass(); // TODO: rename?
-			void makePipeline();
+			void makeGraphicsPipeline();
 			void makeFramebuffers();
 			void makeCommandBuffers();
 			void makeSyncPrimitives();
 			
-			
-			
 			// NOTE: declaration order is very important here! (it dictates the order of destruction)
 			std::vector<char const *>                             mValidationLayers        ;
+			std::vector<char const *>                             mInstanceExtensions      ;
 			std::unique_ptr<GlfwInstance>                         mpGlfwInstance           ;
 			std::unique_ptr<vk::raii::Context>                    mpVkContext              ;
 			std::unique_ptr<vk::raii::Instance>                   mpVkInstance             ;
@@ -66,7 +66,7 @@ namespace gfx {
 			#endif
 			std::unique_ptr<Window>                               mpWindow                 ;
 			std::unique_ptr<vk::raii::PhysicalDevice>             mpPhysicalDevice         ;
-			QueueFamilyIndices                                    mqueueFamilies           ;
+			QueueFamilyIndices                                    mQueueFamilyIndices      ;
 			std::unique_ptr<vk::raii::Device>                     mpDevice                 ;
 			std::unique_ptr<vk::raii::Queue>                      mpGraphicsQueue          ;
 			std::unique_ptr<vk::raii::Queue>                      mpPresentQueue           ;
@@ -90,8 +90,7 @@ namespace gfx {
 			bool                                                  mShouldRemakeSwapchain   ;
 			std::vector<vk::raii::Semaphore>                      mImageAvailable          ;
 			std::vector<vk::raii::Semaphore>                      mImagePresentable        ;
-			std::vector<vk::raii::Fence>                          mImagesInFlight          ; // TODO: better names
-			std::vector<vk::raii::Fence>                          mFencesInFlight          ; // TODO: better names
+			std::vector<vk::raii::Fence>                          mFencesInFlight          ; // TODO: better name
 			u64                                                   mCurrentFrame            ;
 	}; // end-of-class: Renderer
 } // end-of-namespace: gfx
