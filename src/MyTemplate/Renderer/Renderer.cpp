@@ -18,17 +18,19 @@
 namespace gfx {	
 	namespace { // private (file-scope)
 		// TODO(config): refactor
-		u64                    constexpr kDrawWaitTimeout            { 5000 }; // TEMP! return to max<u64>
-		u32                    constexpr kMaxConcurrentFrames        { 2 };
-		PresentationPriority   constexpr kPresentationPriority       { PresentationPriority::eMinimalStuttering };
-		FramebufferingPriority constexpr kFramebufferingPriority     { FramebufferingPriority::eTriple };
-		std::array             constexpr kRequiredDeviceExtensions   { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-		std::array             constexpr kRequiredValidationLayers   { "VK_LAYER_KHRONOS_validation"   };
-		std::array             constexpr kRequiredInstanceExtensions {
-			#if !defined( NDEBUG )
-				VK_EXT_DEBUG_UTILS_EXTENSION_NAME
-			#endif
-		};
+		u64                         constexpr kDrawWaitTimeout            { max<u64>                                 };
+		u32                         constexpr kMaxConcurrentFrames        { 2                                        };
+		PresentationPriority        constexpr kPresentationPriority       { PresentationPriority::eMinimalStuttering };
+		FramebufferingPriority      constexpr kFramebufferingPriority     { FramebufferingPriority::eTriple          };
+		std::array                  constexpr kRequiredDeviceExtensions   { VK_KHR_SWAPCHAIN_EXTENSION_NAME          };
+		#if !defined( NDEBUG )
+		std::array                  constexpr kRequiredValidationLayers   { "VK_LAYER_KHRONOS_validation"            };
+		std::array                  constexpr kRequiredInstanceExtensions { VK_EXT_DEBUG_UTILS_EXTENSION_NAME        };
+		#else
+		std::array<char const *, 0> constexpr kRequiredValidationLayers   {};
+		std::array<char const *, 0> constexpr kRequiredInstanceExtensions {};
+		#endif
+		
 		
 		#if !defined( NDEBUG )
 			VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -75,34 +77,32 @@ namespace gfx {
 				// TODO: expand with more info from pCallbackData later
 				return false; // TODO: add explanation
 			} // end-of-function: debugCallback
-			
-			
-			
-			[[nodiscard]] auto
-			loadBinaryFromFile( std::string const &binaryFilename )
-			{  // TODO: null_terminated_string_view?
-				spdlog::info( "Attempting to open binary file `{}`...", binaryFilename );
-				std::ifstream binaryFile {
-					binaryFilename,
-					std::ios::binary | std::ios::ate // start at the end of the binary
-				};
-				if ( binaryFile ) {
-					spdlog::info( "... successful!" );
-					auto const binarySize {
-						static_cast<std::size_t>( binaryFile.tellg() )
-					};
-					spdlog::info( "... binary size: {}", binarySize );
-					binaryFile.seekg( 0 );
-					std::vector<char> binaryBuffer( binarySize );
-					binaryFile.read( binaryBuffer.data(), binarySize );
-					return binaryBuffer;
-				}
-				else {
-					spdlog::warn( "... failure!" );
-					throw std::runtime_error { "Failed to load binary file!" };
-				}
-			} // end-of-function: loadBinaryFromFile()
 		#endif // end-of-debug-block
+			
+		[[nodiscard]] auto
+		loadBinaryFromFile( std::string const &binaryFilename )
+		{  // TODO: null_terminated_string_view?
+			spdlog::info( "Attempting to open binary file `{}`...", binaryFilename );
+			std::ifstream binaryFile {
+				binaryFilename,
+				std::ios::binary | std::ios::ate // start at the end of the binary
+			};
+			if ( binaryFile ) {
+				spdlog::info( "... successful!" );
+				auto const binarySize {
+					static_cast<std::size_t>( binaryFile.tellg() )
+				};
+				spdlog::info( "... binary size: {}", binarySize );
+				binaryFile.seekg( 0 );
+				std::vector<char> binaryBuffer( binarySize );
+				binaryFile.read( binaryBuffer.data(), binarySize );
+				return binaryBuffer;
+			}
+			else {
+				spdlog::warn( "... failure!" );
+				throw std::runtime_error { "Failed to load binary file!" };
+			}
+		} // end-of-function: loadBinaryFromFile()
 	} // end-of-unnamed-namespace	
 	
 	
