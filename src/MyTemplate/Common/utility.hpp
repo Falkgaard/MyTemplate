@@ -11,13 +11,15 @@
 #    error Unsupported compiler! //	inline void unreachable() {}
 # endif
 
-bool constexpr gIsDebugMode {
+bool constexpr kIsDebugMode {
 	#if !defined( NDEBUG )
 		true
 	#else
 		false
 	#endif
 };
+
+bool constexpr kIsVerbose { false }; // TODO: expose to CMake or make a run-time constant set with args
 
 #include <limits>
 #include <concepts>

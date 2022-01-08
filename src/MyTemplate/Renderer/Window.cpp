@@ -44,12 +44,12 @@ namespace gfx {
 		
 		if ( result != VkResult::VK_SUCCESS ) [[unlikely]]
 			throw std::runtime_error { "Unable to create GLFW window surface!" };
-		
-		mpSurface = std::make_unique<vk::raii::SurfaceKHR>( vkInstance, surfaceTemp );
-		
-		// setup callback(s):
-		glfwSetWindowUserPointer(  mpWindow, this );
-		glfwSetWindowSizeCallback( mpWindow, onResizeCallback );
+		else {
+			mpSurface = std::make_unique<vk::raii::SurfaceKHR>( vkInstance, surfaceTemp );
+			// setup callback(s):
+			glfwSetWindowUserPointer(  mpWindow, this );
+			glfwSetWindowSizeCallback( mpWindow, onResizeCallback );
+		}
 	} // end-of-function: Window::Window
 	
 	Window::Window( Window &&other ) noexcept:

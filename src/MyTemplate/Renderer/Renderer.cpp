@@ -18,16 +18,15 @@
 namespace gfx {	
 	namespace { // private (file-scope)
 		// TODO(config): refactor
-		u64                    constexpr kDrawWaitTimeout            { 5000 }; // max<u64> };
+		u64                    constexpr kDrawWaitTimeout            { 5000 }; // TEMP! return to max<u64>
 		u32                    constexpr kMaxConcurrentFrames        { 2 };
 		PresentationPriority   constexpr kPresentationPriority       { PresentationPriority::eMinimalStuttering };
 		FramebufferingPriority constexpr kFramebufferingPriority     { FramebufferingPriority::eTriple };
 		std::array             constexpr kRequiredDeviceExtensions   { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-		std::array             constexpr kRequiredValidationLayers   { "VK_LAYER_KHRONOS_validation" };
+		std::array             constexpr kRequiredValidationLayers   { "VK_LAYER_KHRONOS_validation"   };
 		std::array             constexpr kRequiredInstanceExtensions {
 			#if !defined( NDEBUG )
-				VK_EXT_DEBUG_UTILS_EXTENSION_NAME ,
-				VK_EXT_DEBUG_REPORT_EXTENSION_NAME  // TODO: obsolete?
+				VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 			#endif
 		};
 		
@@ -37,7 +36,7 @@ namespace gfx {
 				VkDebugUtilsMessageSeverityFlagBitsEXT      msgSeverity,
 				VkDebugUtilsMessageTypeFlagsEXT             msgType,
 				VkDebugUtilsMessengerCallbackDataEXT const *fpCallbackData,
-				void * // unused for now, TODO
+				void * // unused for now
 			)
 			{
 				// TODO: replace invocation duplication by using a function map?
@@ -52,28 +51,29 @@ namespace gfx {
 				auto const &pMsg       { fpCallbackData->pMessage        };
 				switch (msgSeverityLevel) {
 					[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError: {
-						//spdlog::error( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
-						spdlog::error( "{}: {}", msgTypeName, pMsg );
+						spdlog::error( "{} | {} | {}: {}", msgTypeName, pMsgIdName, msgId, pMsg );
+						//spdlog::error( "{}: {}", msgTypeName, pMsg );
 						break;
 					}
 					[[likely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo: {
-						//spdlog::info( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
-						spdlog::info( "{}: {}", msgTypeName, pMsg );
+						spdlog::info( "{} | {} | {}: {}", msgTypeName, pMsgIdName, msgId, pMsg );
+						//spdlog::info( "{}: {}", msgTypeName, pMsg );
 						break;
 					}
-					case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: find a better fit?
-						//spdlog::info( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
-						spdlog::info( "{}: {}", msgTypeName, pMsg );
+					case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose: { // TODO: contemplate a better fit
+						spdlog::debug( "{} | {} | {}: {}", msgTypeName, pMsgIdName, msgId, pMsg );
+						//spdlog::debug( "{}: {}", msgTypeName, pMsg );
 						break;
 					}
 					[[unlikely]] case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning: {
 						//spdlog::warn( "[{}] {} (#{}): {}", msgTypeName, pMsgIdName, msgId, pMsg );
-						spdlog::warn( "{}: {}", msgTypeName, pMsg );
+						spdlog::warn( "{} | {} | {}: {}", msgTypeName, pMsgIdName, msgId, pMsg );
+						//spdlog::warn( "{}: {}", msgTypeName, pMsg );
 						break;
 					}
 				}
-				// TODO: expand with more info from pCallbackData
-				return false; // TODO: explain why
+				// TODO: expand with more info from pCallbackData later
+				return false; // TODO: add explanation
 			} // end-of-function: debugCallback
 			
 			
@@ -121,9 +121,10 @@ namespace gfx {
 		
 		// print all required and available layers:
 		for ( auto const &requiredLayer: kRequiredValidationLayers )
-			spdlog::info( "      required  : `{}`", requiredLayer );
-		for ( auto const &availableLayer: availableLayers )
-			spdlog::info( "      available : `{}`", availableLayer.layerName );
+			spdlog::info( "        required  : `{}`", requiredLayer );
+		if constexpr ( kIsVerbose )
+			for ( auto const &availableLayer: availableLayers )
+				spdlog::info( "        available : `{}`", availableLayer.layerName );
 		
 		// ensure that all required layers are available:
 		bool isMissingLayer { false };
@@ -138,7 +139,7 @@ namespace gfx {
 			}
 			if ( not foundMatch ) [[unlikely]] {
 				isMissingLayer = true;
-				spdlog::error( "    ! MISSING   : `{}`!", requiredLayer );
+				spdlog::error( "   !!! MISSING   : `{}`!", requiredLayer );
 			}
 		}
 		
@@ -172,12 +173,13 @@ namespace gfx {
 		for ( auto const &requiredExtension: kRequiredInstanceExtensions )
 			allRequiredExtensions.insert( requiredExtension );
 		
-		if constexpr ( gIsDebugMode ) {
+		if constexpr ( kIsDebugMode ) {
 			// print required and available instance extensions:
 			for ( auto const &requiredExtension: allRequiredExtensions )
-				spdlog::info( "      required  : `{}`", requiredExtension );
-			for ( auto const &availableExtension: availableExtensions )
-				spdlog::info( "      available : `{}`", availableExtension.extensionName );
+				spdlog::info( "        required  : `{}`", requiredExtension );
+			if constexpr ( kIsVerbose )
+			   for ( auto const &availableExtension: availableExtensions )
+					spdlog::info( "        available : `{}`", availableExtension.extensionName );
 		}
 		
 		// ensure required instance extensions are available:
@@ -193,7 +195,7 @@ namespace gfx {
 			}
 			if ( not isSupported ) [[unlikely]] {
 				isAdequate = false;
-				spdlog::error( "   ! MISSING   : `{}`", requiredExtension );
+				spdlog::error( "   !!! MISSING   : `{}`", requiredExtension );
 			}
 		}
 		
@@ -209,13 +211,14 @@ namespace gfx {
 		// NOTE: all extensions in this function are device extensions
 		auto const &availableExtensions { physicalDevice.enumerateDeviceExtensionProperties() };
 		
-		if constexpr ( gIsDebugMode ) {
+		if constexpr ( kIsDebugMode ) {
 			spdlog::info( "... checking device extension support:" );
 			// print required and available device extensions:
 			for ( auto const &requiredExtension: kRequiredDeviceExtensions )
 				spdlog::info( "      required  : `{}`", requiredExtension );
-			for ( auto const &availableExtension: availableExtensions )
-				spdlog::info( "      available : `{}`", availableExtension.extensionName );
+			if constexpr ( kIsVerbose )
+   			for ( auto const &availableExtension: availableExtensions )
+				   spdlog::info( "      available : `{}`", availableExtension.extensionName );
 		}	
 		
 		bool isAdequate { true }; // assume true until proven otherwise
@@ -290,6 +293,7 @@ namespace gfx {
 			throw std::runtime_error { "Unable to find any physical devices!" };
 		
 		auto *pBestMatch { &physicalDevices.front()       };
+		assert( pBestMatch != nullptr );
 		auto  bestScore  {  calculateScore( *pBestMatch ) };
 		
 		for ( auto &currentPhysicalDevice: physicalDevices | std::views::drop(1) ) {
@@ -302,8 +306,7 @@ namespace gfx {
 		
 		if ( bestScore > 0 ) [[likely]] {
 			spdlog::info(
-				"... selected physical device `{}` with a final score of: {}",
-				pBestMatch->getProperties().deviceName.data(), bestScore
+				"... selected physical device `{}` with a final score of: {}", pBestMatch->getProperties().deviceName.data(), bestScore
 			);
 			mpPhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>( std::move( *pBestMatch ) );
 		}
@@ -376,7 +379,7 @@ namespace gfx {
 	Renderer::maybeMakeDebugMessenger()
 	{
 		#if !defined( NDEBUG )
-			spdlog::info( "Creating debug messenger..." );
+			spdlog::info( "Creating a debug messenger..." );
 			
 			// pre-condition(s):
 			//   shouldn't be null unless the function is called in the wrong order:
@@ -387,7 +390,9 @@ namespace gfx {
 			
 			vk::DebugUtilsMessageSeverityFlagsEXT const severityFlags {
 				vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-				vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eError   |
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo // |
+			//	vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose // TODO: tie to kIsVerbose
 			};
 			
 			vk::DebugUtilsMessageTypeFlagsEXT const typeFlags {
@@ -465,7 +470,7 @@ namespace gfx {
 	void
 	Renderer::makeLogicalDevice()
 	{
-		spdlog::info( "Creating logical device..." );
+		spdlog::info( "Creating a logical device..." );
 		
 		// pre-condition(s):
 		//   shouldn't be undefined and null unless the function is called in the wrong order:
@@ -478,8 +483,8 @@ namespace gfx {
 		// TODO: refactor approach when more queues are needed
 		std::vector<vk::DeviceQueueCreateInfo> createInfos {};
 		
-		f32 const presentQueuePriority  { 1.0f }; // TODO: verify value
-		f32 const graphicsQueuePriority { 1.0f }; // TODO: verify value
+		f32 const presentQueuePriority  { 1.0f };
+		f32 const graphicsQueuePriority { 1.0f };
 		
 		createInfos.push_back(
 			vk::DeviceQueueCreateInfo {
@@ -504,10 +509,10 @@ namespace gfx {
 			vk::DeviceCreateInfo {
 				.queueCreateInfoCount    = static_cast<u32>( createInfos.size() ),
 				.pQueueCreateInfos       = createInfos.data(),
-				.enabledLayerCount       = 0,       // no longer used; TODO(support): add conditionally to support older versions?
-				.ppEnabledLayerNames     = nullptr, // ^ ditto
-				.enabledExtensionCount   = static_cast<u32>( kRequiredDeviceExtensions.size() ), // TODO?
-				.ppEnabledExtensionNames = kRequiredDeviceExtensions.data()                      // TODO?
+				.enabledLayerCount       = 0,
+				.ppEnabledLayerNames     = nullptr,
+				.enabledExtensionCount   = static_cast<u32>( kRequiredDeviceExtensions.size() ), // TODO
+				.ppEnabledExtensionNames = kRequiredDeviceExtensions.data(),                     // TODO
 			}
 		);
 	} // end-of-function: Renderer::makeLogicalDevice
@@ -518,7 +523,7 @@ namespace gfx {
 	[[nodiscard]] std::unique_ptr<vk::raii::Queue>
 	Renderer::makeQueue( u32 const queueFamilyIndex, u32 const queueIndex )
 	{
-		spdlog::info( "Creating handle for queue #{} of queue family #{}...", queueIndex, queueFamilyIndex );
+		spdlog::info( "Creating a handle for queue #{} of queue family #{}...", queueIndex, queueFamilyIndex );
 		
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
@@ -533,7 +538,7 @@ namespace gfx {
 	Renderer::makeGraphicsQueue()
 	{
 		// Just using one queue for now. TODO(1.0)
-		spdlog::info( "Creating graphics queue..." );
+		spdlog::info( "Creating a graphics queue..." );
 		
 		// pre-condition(s):
 		//   should be null unless the function has been called multiple times (which it shouldn't):
@@ -548,13 +553,13 @@ namespace gfx {
 	Renderer::makePresentQueue()
 	{
 		// Just using one queue for now. TODO(1.0)
-		spdlog::info( "Creating present queue..." );
+		spdlog::info( "Creating a present queue..." );
 		
 		// pre-condition(s):
 		//	  should be null unless the function has been called multiple times (which it shouldn't):
 		assert( mpPresentQueue == nullptr ); 
 		
-		mpGraphicsQueue = makeQueue( mQueueFamilyIndices.presentIndex, mQueueFamilyIndices.areSeparate ? 1 : 0 );
+		mpPresentQueue = makeQueue( mQueueFamilyIndices.presentIndex, mQueueFamilyIndices.areSeparate ? 1 : 0 );
 	} // end-of-function: Renderer::makePresentQueue
 	
 	
@@ -562,7 +567,7 @@ namespace gfx {
 	void
 	Renderer::makeCommandPool()
 	{
-		spdlog::info( "Creating command buffer pool..." );
+		spdlog::info( "Creating a command buffer pool..." );
 		
 		// pre-condition(s):
 		//   shouldn't be null or undefined unless the function is called in the wrong order:
@@ -606,18 +611,17 @@ namespace gfx {
 	void
 	Renderer::selectSurfaceFormat()
 	{
-		spdlog::info( "Selecting swapchain surface format..." );
+		spdlog::info( "Selecting a swapchain surface format..." );
 			
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
 		assert( mpPhysicalDevice != nullptr );
 		assert( mpWindow         != nullptr );
 		
-		// TODO: make a member?
 		auto const availableSurfaceFormats { mpPhysicalDevice->getSurfaceFormatsKHR( *mpWindow->getSurface() ) };
 		for ( auto const &surfaceFormat: availableSurfaceFormats ) {
-			if ( surfaceFormat.format     == vk::Format::eB8G8R8A8Srgb               // TODO: refactor out
-			and  surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) [[unlikely]] { // ^ ditto
+			if ( surfaceFormat.format     == vk::Format::eB8G8R8A8Srgb
+			and  surfaceFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear ) [[unlikely]] {
 				spdlog::info(
 					"... selected surface format `{}` in color space `{}`",
 					to_string( surfaceFormat.format     ),
@@ -636,7 +640,7 @@ namespace gfx {
 	void
 	Renderer::selectSurfaceExtent()
 	{
-		spdlog::info( "Selecting swapchain surface extent..." );
+		spdlog::info( "Selecting a swapchain surface extent..." );
 			
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
@@ -671,14 +675,14 @@ namespace gfx {
 	Renderer::selectPresentMode() noexcept
 	{
 		// TODO: add support for ordered priorities instead of just ideal/fallback.
-		spdlog::info( "Selecting swapchain present mode..." );
+		spdlog::info( "Selecting a swapchain present mode..." );
 			
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
 		assert( mpPhysicalDevice != nullptr );
 		assert( mpWindow         != nullptr );
 		
-		auto const &windowSurface         { mpWindow->getSurface() }; // TODO: make member?
+		auto const &windowSurface         { mpWindow->getSurface() };
 		auto const  fallbackPresentMode   { vk::PresentModeKHR::eFifo };
 		auto const  availablePresentModes { mpPhysicalDevice->getSurfacePresentModesKHR(*windowSurface) };
 		auto const  idealPresentMode {
@@ -695,10 +699,7 @@ namespace gfx {
 			std::ranges::find( availablePresentModes, idealPresentMode ) != availablePresentModes.end()
 		};
 		if ( hasSupportForIdealMode ) [[likely]] {
-			spdlog::info(
-				"... ideal present mode `{}` is supported by device!",
-				to_string( idealPresentMode )
-			);
+			spdlog::info( "... ideal present mode `{}` is supported by device!", to_string(idealPresentMode) );
 			mPresentMode = idealPresentMode;
 		}
 		else [[unlikely]] {
@@ -715,7 +716,7 @@ namespace gfx {
 	void
 	Renderer::selectFramebufferCount() noexcept
 	{
-		spdlog::info( "Selecting swapchain framebuffer count..." );
+		spdlog::info( "Selecting a swapchain framebuffer count..." );
 			
 		// pre-condition(s):
 		//   shouldn't be ??? unless the function is called in the wrong order:
@@ -744,7 +745,7 @@ namespace gfx {
 	void
 	Renderer::makeSwapchain()
 	{
-		spdlog::info( "Making swapchain..." );
+		spdlog::info( "Making a swapchain..." );
 		
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
@@ -769,8 +770,8 @@ namespace gfx {
 			vk::SwapchainCreateInfoKHR {
 				.surface               = *mpWindow->getSurface(),
 				.minImageCount         =  mFramebufferCount,
-				.imageFormat           =  mSurfaceFormat.format,     // TODO: config refactor
-				.imageColorSpace       =  mSurfaceFormat.colorSpace, // TODO: config refactor
+				.imageFormat           =  mSurfaceFormat.format,
+				.imageColorSpace       =  mSurfaceFormat.colorSpace,
 				.imageExtent           =  mSurfaceExtent,
 				.imageArrayLayers      =  1, // non-stereoscopic
 				.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // TODO(later): eTransferDst for post-processing
@@ -805,7 +806,6 @@ namespace gfx {
 					                  }
 				}
 			);
-		spdlog::info( "... done!" );
 		}	
 	} // end-of-function: Renderer::makeSwapchain
 	
@@ -814,7 +814,7 @@ namespace gfx {
 	[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule>
 	Renderer::makeShaderModuleFromBinary( std::vector<char> const &shaderBinary ) const
 	{
-		spdlog::info( "Creating shader module from shader SPIR-V bytecode..." );
+		spdlog::info( "Creating a shader module from shader SPIR-V bytecode..." );
 		
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
@@ -834,7 +834,7 @@ namespace gfx {
 	[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule>
 	Renderer::makeShaderModuleFromFile( std::string const &shaderSpirvBytecodeFilename ) const
 	{
-		spdlog::info( "Creating shader module from shader SPIR-V bytecode file..." );
+		spdlog::info( "Creating a shader module from shader SPIR-V bytecode file..." );
 		return makeShaderModuleFromBinary( loadBinaryFromFile( shaderSpirvBytecodeFilename ) );
 	} // end-of-function: Renderer::makeShaderModuleFromFile
 	
@@ -843,7 +843,7 @@ namespace gfx {
 	void
 	Renderer::makeGraphicsPipelineLayout()
 	{
-		spdlog::info( "Creating graphics pipeline layout..." );
+		spdlog::info( "Creating a graphics pipeline layout..." );
 		
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
@@ -858,7 +858,6 @@ namespace gfx {
 				.pPushConstantRanges    = nullptr  // TODO: explain
 			}
 		);
-		spdlog::info( "... done!" );
 	} // end-of-function: Renderer::makeGraphicsPipelineLayout
 	
 	
@@ -866,7 +865,7 @@ namespace gfx {
 	void
 	Renderer::makeRenderPass()
 	{
-		spdlog::info( "Creating render pass..." );
+		spdlog::info( "Creating a render pass..." );
 		
 		// pre-condition(s):
 		//   shouldn't be null or ??? unless the function is called in the wrong order:
@@ -904,7 +903,6 @@ namespace gfx {
 				.pSubpasses      = &colorSubpassDesc
 			}
 		);
-		spdlog::info( "... done!" );
 	} // end-of-function: Renderer::makeRenderPass
 	
 	
@@ -913,7 +911,7 @@ namespace gfx {
 	Renderer::makeGraphicsPipeline()
 	{
 		// TODO: lots of refactoring!
-		spdlog::info( "Creating graphics pipeline..." );
+		spdlog::info( "Creating a graphics pipeline..." );
 		
 		
 		// pre-condition(s):
@@ -1059,7 +1057,6 @@ namespace gfx {
 				.basePipelineIndex   =   -1,
 			}
 		);
-		spdlog::info( "... done!" );
 	} // end-of-function: Renderer::makeGraphicsPipeline
 	
 	
@@ -1074,8 +1071,6 @@ namespace gfx {
 		assert( mpDevice     != nullptr );
 		assert( mpRenderPass != nullptr );
 			
-		mFramebuffers.clear();
-		assert( mFramebufferCount == mImageViews.size() ); // TEMP TODO REMOVE
 		mFramebuffers.reserve( mFramebufferCount );
 		for ( auto const &imageView: mImageViews ) {
 			mFramebuffers.emplace_back(
@@ -1090,8 +1085,7 @@ namespace gfx {
 				}
 			);
 		}
-		spdlog::info( "... done!" );
-	} // end-of-function: Renderer::makeFramebuffers		
+	} // end-of-function: Renderer::makeFramebuffers	
 	
 	
 	
@@ -1105,7 +1099,6 @@ namespace gfx {
 		assert( mpDevice     != nullptr );
 		assert( mpRenderPass != nullptr );
 		
-		mpCommandBuffers.reset();
 		mpCommandBuffers = makeCommandBuffers( vk::CommandBufferLevel::ePrimary, mFramebufferCount ); // TODO(1.0)
 		vk::ClearValue const clearValue { .color = {{{ 0.02f, 0.02f, 0.02f, 1.0f }}} };
 		
@@ -1148,7 +1141,6 @@ namespace gfx {
 			commandBuffer.endRenderPass();
 			commandBuffer.end();
 		}
-		spdlog::info( "... done!" );
 	} // end-of-function: Renderer::makeCommandBuffers
 	
 	
@@ -1157,7 +1149,7 @@ namespace gfx {
 	Renderer::makeSyncPrimitives()
 	{
 		// TODO(refactor)
-		spdlog::info( "Creating synchronization primitives..." );
+		spdlog::info( "Creating synchronization primitive(s)..." );
 		
 		mImagePresentable .clear();
 		mImageAvailable   .clear();
@@ -1170,7 +1162,6 @@ namespace gfx {
 			mImageAvailable   .emplace_back( mpDevice->createSemaphore({}) );
 			mFencesInFlight   .emplace_back( mpDevice->createFence({.flags = vk::FenceCreateFlagBits::eSignaled}) );
 		}
-		spdlog::info( "... done!" );
 	} // end-of-function: Renderer::makeSyncPrimitives()
 	
 	
@@ -1178,7 +1169,10 @@ namespace gfx {
 	void
 	Renderer::generateDynamicState()
 	{
-		// TODO(cleanup): Might need to clean up mImageViews, mImages, mpCommandBuffers, mDescriptors, whatever here
+		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
+		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
+		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
+		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
 		// TODO(refactor)
 		spdlog::debug( "Generating dynamic state..." );
 		
@@ -1186,17 +1180,22 @@ namespace gfx {
 		mpDevice->waitIdle();
 		
 		// delete previous state (if any) in the right order:
+		mImages.clear();
+		mImageViews.clear();
 		mFramebuffers.clear();
 		if ( mpCommandBuffers ) {
 			mpCommandBuffers->clear();
 			mpCommandBuffers.reset();
 		}
-		if ( mpGraphicsPipeline ) {
+		if ( mpGraphicsPipeline )
 			mpGraphicsPipeline.reset();
-	   }
-		if ( mpSwapchain ) {
+		if ( mpSwapchain )
 			mpSwapchain.reset();
-		}
+		
+		assert( mFramebuffers.empty()         );
+		assert( mpCommandBuffers   == nullptr );
+		assert( mpGraphicsPipeline == nullptr );
+		assert( mpSwapchain        == nullptr );
 		
 		makeSwapchain();
 		makeGraphicsPipeline();
@@ -1264,9 +1263,9 @@ namespace gfx {
 	Renderer::operator()()
 	{
 		auto const frame = mCurrentFrame % kMaxConcurrentFrames;
-		if constexpr ( gIsDebugMode ) spdlog::debug( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
+		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
 		
-		if constexpr ( gIsDebugMode ) spdlog::debug( "[draw]: Waiting..." );
+		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Waiting... (draw fence)" );
 		{
 			auto const waitResult {
 				mpDevice->waitForFences( *mFencesInFlight[frame], VK_TRUE, kDrawWaitTimeout )
@@ -1275,7 +1274,7 @@ namespace gfx {
 				throw std::runtime_error { "Draw fence wait timed out!" }; // TEMP: handle eTimeout properly
 		}
 		
-		if constexpr ( gIsDebugMode ) spdlog::debug( "[draw]: Acquiring..." );
+		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Acquiring swapchain image..." );
 		u32 acquiredIndex;
 		try {
 			auto const [result, index] {
@@ -1284,17 +1283,19 @@ namespace gfx {
 			acquiredIndex = index;
 		}
 		catch ( vk::OutOfDateKHRError const & ) {
+			spdlog::info( "Swapchain out-of-date!" );
 			generateDynamicState(); // likely having to handle a screen resize...
 			return;
 		}
 		catch ( vk::SystemError const &e ) {
-			throw std::runtime_error { fmt::format( "Failed to acquire swapchain image: {}", e.what() ) };
+			spdlog::error( "Encountered system error: \"{}\"!", e.what() );
+			throw std::runtime_error { "Failed to acquire swapchain image!" };
 		}	
 		
-		if constexpr ( gIsDebugMode ) spdlog::debug( "[draw]: Resetting..." );
+		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Resetting fence..." );
 		mpDevice->resetFences( *mFencesInFlight[frame] );
 		
-		if constexpr ( gIsDebugMode ) spdlog::debug( "[draw]: Submitting..." );
+		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Submitting draw command buffer..." );
 		try {
 			vk::PipelineStageFlags const waitDstStages ( vk::PipelineStageFlagBits::eColorAttachmentOutput );
 			mpGraphicsQueue->submit(
@@ -1311,10 +1312,11 @@ namespace gfx {
 			);
 		}
 		catch ( vk::SystemError const &e ) {
-			throw std::runtime_error { fmt::format( "Failed to submit draw command buffer: {}", e.what() ) };
+			spdlog::error( "Encountered system error: \"{}\"!", e.what() );
+			throw std::runtime_error { "Failed to submit draw command buffer!" };
 		}
 		
-		if constexpr ( gIsDebugMode ) spdlog::debug( "[draw]: Presenting..." );
+		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Presenting swapchain image to surface..." );
 		vk::Result presentResult;
 		try {
 			presentResult = mpPresentQueue->presentKHR(
@@ -1331,20 +1333,22 @@ namespace gfx {
 			/* do nothing */
 		}
 		catch ( vk::SystemError const &e ) {
-			throw std::runtime_error { fmt::format( "Failed to present swapchain image: {}", e.what() ) };
+			spdlog::error( "Encountered system error: \"{}\"!", e.what() );
+			throw std::runtime_error { "Failed to present swapchain image!" };
 		}
 		
-		if constexpr ( gIsDebugMode ) spdlog::debug( "[draw]: Evaluating..." );
+		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Evaluating swapchain state..." );
 		if ( mShouldRemakeSwapchain
-		or   presentResult == vk::Result::eSuboptimalKHR
+//		or   presentResult == vk::Result::eSuboptimalKHR // TEMP disable
 		or   presentResult == vk::Result::eErrorOutOfDateKHR )
 		{
+			spdlog::info( "Swapchain out-of-date or window resized!" );
 			mShouldRemakeSwapchain = false;
 			generateDynamicState();
 			return; // TODO: verify that this is needed
 		}
 		
-		if constexpr ( gIsDebugMode ) spdlog::debug( "[draw]: Finishing..." );
+		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Finishing draw!" );
 		++mCurrentFrame;
 	} // end-of-function: Renderer::operator()
 	
