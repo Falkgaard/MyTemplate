@@ -18,6 +18,8 @@
 #include <cassert>
 
 // TODO(later): Switch over to a custom allocator (e.g. for buffers) later, such as VulkanMemoryAllocator
+// TODO(later): Use a single buffer for shared attributes (verts, indices, etc)
+// TODO(later): Look into aliasing (memory buffer reuse)
 
 namespace gfx {	
 	namespace { // private (file-scope)
@@ -699,7 +701,7 @@ namespace gfx {
 		if ( mSurfaceCapabilities.currentExtent.height == max<u32> ) // TODO: unlikely? likely?
 			result = mSurfaceCapabilities.currentExtent;
 		else {
-			auto [width, height] = mpWindow->getDimensions();
+			auto [width, height] = mpWindow->getWindowDimensions();
 			result.width =
 				std::clamp(
 					static_cast<u32>(width),
@@ -1201,7 +1203,7 @@ namespace gfx {
 		
 		spdlog::info( "... binding buffer device memory to buffer handle" );
 		bufferHandle.bindMemory( *bufferMemory, 0 );
-	
+   
 		return std::make_unique<Buffer>( std::move(bufferHandle), std::move(bufferMemory) );
 	} // end-of-function: Renderer::makeBuffer
 	
@@ -1421,6 +1423,7 @@ namespace gfx {
 		assert( mpGraphicsPipeline == nullptr );
 		assert( mpSwapchain        == nullptr );
 		
+		// handle minimization:
 		mpWindow->waitResize();
 		mpDevice->waitIdle();	
 		

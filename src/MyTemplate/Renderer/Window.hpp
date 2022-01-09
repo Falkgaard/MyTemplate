@@ -24,12 +24,13 @@ namespace gfx {
 			Window( Window &&      ) noexcept;
 			~Window()                noexcept;
 			// TODO: assignment operators?
-			[[nodiscard]] Dimensions                   getDimensions() const;
-			[[nodiscard]] vk::raii::SurfaceKHR const & getSurface()    const;
-			[[nodiscard]] vk::raii::SurfaceKHR       & getSurface()         ;
-			[[nodiscard]] bool                         wasClosed()     const;
-			void                                       update()             ;
-			void                                       waitResize()         ;
+			[[nodiscard]] Dimensions                   getFramebufferDimensions() const;
+			[[nodiscard]] Dimensions                   getWindowDimensions()      const;
+			[[nodiscard]] vk::raii::SurfaceKHR const & getSurface()               const;
+			[[nodiscard]] vk::raii::SurfaceKHR       & getSurface()                    ;
+			[[nodiscard]] bool                         wasClosed()                const;
+			void                                       update()                        ;
+			void                                       waitResize()                    ;
 		private:
 			static void onResizeCallback( GLFWwindow *, [[maybe_unused]] int width, [[maybe_unused]] int height );
 			

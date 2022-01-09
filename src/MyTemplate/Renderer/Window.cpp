@@ -71,7 +71,16 @@ namespace gfx {
 	} // end-of-function: Window::~Window
 	
 	[[nodiscard]] Window::Dimensions
-	Window::getDimensions() const
+	Window::getFramebufferDimensions() const
+	{
+		spdlog::debug( "Accessing framebuffer dimensions..." );
+		Dimensions dimensions;
+		glfwGetFramebufferSize( mpWindow, &dimensions.width, &dimensions.height );
+		return dimensions;
+	} // end-of-function: Window::getDimensions	
+	
+	[[nodiscard]] Window::Dimensions
+	Window::getWindowDimensions() const
 	{
 		spdlog::debug( "Accessing window dimensions..." );
 		Dimensions dimensions;
@@ -109,8 +118,7 @@ namespace gfx {
 	void
 	Window::waitResize()
 	{
-		i32 width  { 0 };
-		i32 height { 0 };
+		i32 width, height;
 		glfwGetFramebufferSize( mpWindow, &width, &height );
 		while ( width == 0 or height == 0 ) {
 		    glfwGetFramebufferSize( mpWindow, &width, &height );
