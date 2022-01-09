@@ -17,11 +17,13 @@
 #include <memory>
 #include <cassert>
 
+// TODO(later): Switch over to a custom allocator (e.g. for buffers) later, such as VulkanMemoryAllocator
+
 namespace gfx {	
 	namespace { // private (file-scope)
 		// TODO(config): refactor
 		u64                         constexpr kDrawWaitTimeout            { max<u64>                                 };
-		u32                         constexpr kMaxConcurrentFrames        { 2                                        };
+		u32                         constexpr kMaxConcurrentFrames        { 3                                        };
 		PresentationPriority        constexpr kPresentationPriority       { PresentationPriority::eMinimalStuttering };
 		FramebufferingPriority      constexpr kFramebufferingPriority     { FramebufferingPriority::eTriple          };
 		std::array                  constexpr kRequiredDeviceExtensions   { VK_KHR_SWAPCHAIN_EXTENSION_NAME          };
@@ -573,66 +575,46 @@ namespace gfx {
 	
 	
 	void
-	Renderer::makeGraphicsQueue()
+	Renderer::makeQueues()
 	{
-		// Just using one queue for now. TODO(1.0)
-		spdlog::info( "Creating a graphics queue..." );
-		
+		spdlog::info( "Creating queues..." );
+
 		// pre-condition(s):
 		//   should be null unless the function has been called multiple times (which it shouldn't):
-		assert( mpGraphicsQueue              == nullptr                        ); 
-		assert( mQueueFamilyIndices.graphics == QueueFamilyIndices::kUndefined ); 
+		assert( mpGraphicsQueue                   == nullptr                        ); 
+		assert( mpPresentQueue                    == nullptr                        ); 
+		assert( mpTransferQueue                   == nullptr                        ); 
+		assert( mQueueFamilyIndices.graphicsIndex != QueueFamilyIndices::kUndefined ); 
+		assert( mQueueFamilyIndices.presentIndex  != QueueFamilyIndices::kUndefined ); 
+		assert( mQueueFamilyIndices.transferIndex != QueueFamilyIndices::kUndefined ); 
 		
+		spdlog::info( "... creating the graphics queue" );
 		mpGraphicsQueue = makeQueue( mQueueFamilyIndices.graphicsIndex, 0 );
-	} // end-of-function: Renderer::makeGraphicsQueue
+		spdlog::info( "... creating the present queue" );
+		mpPresentQueue  = makeQueue( mQueueFamilyIndices.presentIndex,  0 );
+		spdlog::info( "... creating the transfer queue" );
+		mpTransferQueue = makeQueue( mQueueFamilyIndices.transferIndex, 0 );
+	} // end-of-function: Renderer::makeQueues
 	
 	
 	
 	void
-	Renderer::makePresentQueue()
+	Renderer::makeCommandPools()
 	{
-		// Just using one queue for now. TODO(1.0)
-		spdlog::info( "Creating a present queue..." );
-		
-		// pre-condition(s):
-		//   should be null unless the function has been called multiple times (which it shouldn't):
-		assert( mpPresentQueue              == nullptr                        ); 
-		assert( mQueueFamilyIndices.present == QueueFamilyIndices::kUndefined ); 
-		
-		mpPresentQueue = makeQueue( mQueueFamilyIndices.presentIndex, 0 );
-	} // end-of-function: Renderer::makePresentQueue
-	
-	
-	
-	void
-	Renderer::makeTransferQueue()
-	{
-		// Just using one queue for now. TODO(1.0)
-		spdlog::info( "Creating a transfer queue..." );
-		
-		// pre-condition(s):
-		//   should be null unless the function has been called multiple times (which it shouldn't):
-		assert( mpTransferQueue              == nullptr                        ); 
-		assert( mQueueFamilyIndices.transfer == QueueFamilyIndices::kUndefined ); 
-		
-		mpPresentQueue = makeQueue( mQueueFamilyIndices.transferIndex, 0 );
-	} // end-of-function: Renderer::makeTransferQueue
-	
-	
-	
-	void
-	Renderer::makeCommandPool()
-	{
-		spdlog::info( "Creating a command buffer pool..." );
+		spdlog::info( "Creating a command buffer pools..." );
 		
 		// pre-condition(s):
 		//   shouldn't be null or undefined unless the function is called in the wrong order:
 		assert( mpGraphicsQueue                   != nullptr                        ); 
+		assert( mpTransferQueue                   != nullptr                        ); 
 		assert( mQueueFamilyIndices.graphicsIndex != QueueFamilyIndices::kUndefined ); 
+		assert( mQueueFamilyIndices.transferIndex != QueueFamilyIndices::kUndefined ); 
 		//   should be null unless the function has been called multiple times (which it shouldn't):
-		assert( mpCommandPool == nullptr ); 
+		assert( mpGraphicsCommandPool == nullptr ); 
+		assert( mpTransferCommandPool == nullptr ); 
 		
-		mpCommandPool = std::make_unique<vk::raii::CommandPool>(
+		spdlog::info( "... creating a graphics command buffer pool" );
+		mpGraphicsCommandPool = std::make_unique<vk::raii::CommandPool>(
 			*mpDevice,
 			vk::CommandPoolCreateInfo {
 				// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
@@ -640,7 +622,17 @@ namespace gfx {
 				.queueFamilyIndex = mQueueFamilyIndices.graphicsIndex
 			}
 		);
-	} // end-of-function: Renderer::makeCommandPool
+		
+		spdlog::info( "... creating a graphics command buffer pool" );
+		mpTransferCommandPool = std::make_unique<vk::raii::CommandPool>(
+			*mpDevice,
+			vk::CommandPoolCreateInfo {
+				// NOTE: Flags can be set here to optimize for lifetime or enable resetability.
+				//       Also, one pool would be needed for each queue family (if ever extended).
+				.queueFamilyIndex = mQueueFamilyIndices.transferIndex
+			}
+		);
+	} // end-of-function: Renderer::makeCommandPools
 	
 	
 	
@@ -655,7 +647,7 @@ namespace gfx {
 		return std::make_unique<vk::raii::CommandBuffers>(
 			*mpDevice,
 			vk::CommandBufferAllocateInfo {
-				.commandPool        = **mpCommandPool,
+				.commandPool        = **mpGraphicsCommandPool,
 				.level              =   level,
 				.commandBufferCount =   bufferCount
 			}
@@ -1148,75 +1140,136 @@ namespace gfx {
 		}
 	} // end-of-function: Renderer::makeFramebuffers	
 	
-	void
-	Renderer::makeVertexBuffers()
+	
+	
+	[[nodiscard]] std::unique_ptr<Buffer>
+	Renderer::makeBuffer(
+		vk::BufferUsageFlags    const usage,
+		vk::DeviceSize          const size,
+		vk::MemoryPropertyFlags const properties
+	)
 	{
-		spdlog::info( "Creating vertex buffer(s)..." );
+		spdlog::info( "Creating buffer..." );
 		
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
-		assert( mpDevice     != nullptr );
+		assert( mpDevice != nullptr );
 		
-		auto const vertexBufferSize { triangle.size() * sizeof(Vertex2D) };
-		u32  const queueFamilyIndices[] {
+		u32 const queueFamilyIndices[] {
 			mQueueFamilyIndices.graphicsIndex,
-			mQueueFamilyIndices.presentIndex
-		};
-		spdlog::info( "... creating buffer(s)" );
-		mpVertexBuffer = std::make_unique<vk::raii::Buffer>(
-			*mpDevice,
-			vk::BufferCreateInfo {
-				.size                  = vertexBufferSize,
-				.usage                 = vk::BufferUsageFlagBits::eVertexBuffer,
-				.sharingMode           = vk::SharingMode::eConcurrent,
-				.queueFamilyIndexCount = 2,
-				.pQueueFamilyIndices   = queueFamilyIndices
-			}
-		);
-		
-		auto const memoryRequirements {
-			mpVertexBuffer->getMemoryRequirements()
+			mQueueFamilyIndices.transferIndex
 		};
 		
-		auto const memoryPropertiesFlags {
-			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		spdlog::info( "... creating buffer handle" );
+		auto bufferHandle {
+			vk::raii::Buffer(
+				*mpDevice,
+				vk::BufferCreateInfo {
+					.size                  = size,
+					.usage                 = usage,
+					.sharingMode           = vk::SharingMode::eConcurrent,
+					.queueFamilyIndexCount = 2,
+					.pQueueFamilyIndices   = queueFamilyIndices
+				}
+			)
 		};
+		
+		auto const requirements { bufferHandle.getMemoryRequirements() };
 		
 		vk::MemoryAllocateInfo const allocateInfo {
-			.allocationSize  = memoryRequirements.size,
-			.memoryTypeIndex = findMemoryTypeIndex(
-			                      memoryRequirements.memoryTypeBits,
-			                      memoryPropertiesFlags
-			                 )
+			.allocationSize  = requirements.size,
+			.memoryTypeIndex = findMemoryTypeIndex( requirements.memoryTypeBits, properties )
 		};
-		
-		spdlog::info( "... allocating device memory" );
-		mpVertexBufferMemory = std::make_unique<vk::raii::DeviceMemory>(
-			std::move(
-				mpDevice->allocateMemory(
-					{
-						.allocationSize  = memoryRequirements.size,
-						.memoryTypeIndex = findMemoryTypeIndex(
-						                      memoryRequirements.memoryTypeBits,
-						                      memoryPropertiesFlags
-						                 )
-					}
+		                 
+		spdlog::info( "... allocating buffer device memory" );
+		auto bufferMemory {
+			vk::raii::DeviceMemory(
+				std::move(
+					mpDevice->allocateMemory(
+						{
+							.allocationSize  = requirements.size,
+							.memoryTypeIndex = findMemoryTypeIndex(
+							                      requirements.memoryTypeBits,
+							                      properties
+							                 )
+						}
+					)
 				)
 			)
+		};
+		
+		
+		spdlog::info( "... binding buffer device memory to buffer handle" );
+		bufferHandle.bindMemory( *bufferMemory, 0 );
+	
+		return std::make_unique<Buffer>( std::move(bufferHandle), std::move(bufferMemory) );
+	} // end-of-function: Renderer::makeBuffer
+	
+	
+	
+	void
+	Renderer::copy( Buffer const &src, Buffer &dst, vk::DeviceSize const size )
+	{
+		spdlog::info( "Copying {} bytes of data from one buffer to another...", size );
+		vk::raii::CommandBuffers commandBuffer(
+			*mpDevice,
+			vk::CommandBufferAllocateInfo {
+				.commandPool        = **mpTransferCommandPool,
+				.level              =   vk::CommandBufferLevel::ePrimary,
+				.commandBufferCount =   1
+			}
+		);
+		commandBuffer[0].begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+		commandBuffer[0].copyBuffer( *src.handle, *dst.handle, {{.srcOffset=0, .dstOffset=0, .size=size}} );
+		commandBuffer[0].end();
+		vk::SubmitInfo const submitInfo {
+			.commandBufferCount =  1,
+			.pCommandBuffers    = &*commandBuffer[0]
+		};
+		mpTransferQueue->submit({ submitInfo });
+		mpTransferQueue->waitIdle(); // TODO(later): use fence instead if allowing concurrent transfers
+	} // end-of-function: Renderer::copy
+	
+	
+	
+	void
+	Renderer::makeVertexBuffer()
+	{
+		spdlog::info( "Creating vertex buffer..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpDevice != nullptr );
+		
+
+		spdlog::info( "... creating staging buffer" );
+		vk::DeviceSize const size { triangle.size() * sizeof(Vertex2D) };
+		auto stagingBuffer = makeBuffer(
+			vk::BufferUsageFlagBits::eTransferSrc,
+			size,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
 		);
 		
-		spdlog::info( "... binding memory to buffer" );
-		mpVertexBuffer->bindMemory( **mpVertexBufferMemory, 0 );
-		// TODO(later): free memory somewhere after done?
+		spdlog::info( "... mapping staging buffer memory to CPU memory" );
+		auto *mappedMemory { stagingBuffer->memory.mapMemory( 0, size ) };
 		
-		spdlog::info( "... binding memory to buffer" );
-		auto *mappedMemory { mpVertexBufferMemory->mapMemory( 0, vertexBufferSize ) };
-		std::memcpy( mappedMemory, triangle.data(), vertexBufferSize );
+		spdlog::info( "... copying vertex data to staging buffer's memory" );
+		std::memcpy( mappedMemory, triangle.data(), static_cast<std::size_t>(size) );
 		// NOTE: if not using host coherent memory (which we are),
 		// call flushMappedMemoryRanges here and invalidateMappedMemoryRanges before reading it
-		mpVertexBufferMemory->unmapMemory();
+		spdlog::info( "... unmapping memory" );
+		stagingBuffer->memory.unmapMemory();
+		
+		spdlog::info( "... creating vertex buffer" );
+		mpVertexBuffer = makeBuffer(
+			vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+			size,
+			vk::MemoryPropertyFlagBits::eDeviceLocal
+		);
+		spdlog::info( "... copying data from staging buffer memory to vertex buffer memory" );
+		copy( *stagingBuffer, *mpVertexBuffer, size );
 		spdlog::info( "... done!" );
-	}
+	} // end-of-function: Renderer::makeVertexBuffer
 	
 	
 	
@@ -1259,7 +1312,7 @@ namespace gfx {
 			// TODO(later): 	{ *descriptorSet },
 			// TODO(later): 	nullptr
 			// TODO(later): );
-			commandBuffer.bindVertexBuffers( 0, { **mpVertexBuffer }, { 0 } );
+			commandBuffer.bindVertexBuffers( 0, { *mpVertexBuffer->handle }, { 0 } );
 			// NOTE(possibility): command_buffer.bindDescriptorSets()
 			// NOTE(possibility): command_buffer.setViewport()
 			// NOTE(possibility): command_buffer.setScissor()
@@ -1350,14 +1403,13 @@ namespace gfx {
 		selectPhysicalDevice();
 		selectQueueFamilies(); // TODO: pick a better name
 		makeLogicalDevice();
-		makeGraphicsQueue();
-		makePresentQueue();
-		makeCommandPool();
+		makeQueues();
+		makeCommandPools();
 		// "dynamic" part:
 		makeSwapchain();
 		makeGraphicsPipeline();
 		makeFramebuffers();
-		makeVertexBuffers();
+		makeVertexBuffer();
 		makeCommandBuffers();
 		makeSyncPrimitives(); // TODO(config): refactor so it is updated whenever framebuffer count changes
 	//instance
@@ -1397,9 +1449,8 @@ namespace gfx {
 	Renderer::operator()()
 	{
 		auto const frame = mCurrentFrame % kMaxConcurrentFrames;
-		if constexpr ( true /*TODO: kIsDebugMode*/ ) spdlog::info( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
+		if constexpr ( kIsDebugMode ) spdlog::info( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
 		
-		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Waiting... (draw fence)" );
 		{
 			auto const waitResult {
 				mpDevice->waitForFences( *mFencesInFlight[frame], VK_TRUE, kDrawWaitTimeout )
@@ -1408,7 +1459,6 @@ namespace gfx {
 				throw std::runtime_error { "Draw fence wait timed out!" }; // TEMP: handle eTimeout properly
 		}
 		
-		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Acquiring swapchain image..." );
 		u32 acquiredIndex;
 		try {
 			auto const [result, index] {
@@ -1426,11 +1476,8 @@ namespace gfx {
 			throw std::runtime_error { "Failed to acquire swapchain image!" };
 		}	
 		
-		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Resetting fence..." );
-		mpDevice->resetFences( *mFencesInFlight[frame] );
-		
-		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Submitting draw command buffer..." );
 		try {
+			mpDevice->resetFences( *mFencesInFlight[frame] );
 			vk::PipelineStageFlags const waitDstStages ( vk::PipelineStageFlagBits::eColorAttachmentOutput );
 			mpGraphicsQueue->submit(
 				vk::SubmitInfo {
@@ -1450,7 +1497,6 @@ namespace gfx {
 			throw std::runtime_error { "Failed to submit draw command buffer!" };
 		}
 		
-		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Presenting swapchain image to surface..." );
 		vk::Result presentResult;
 		try {
 			presentResult = mpPresentQueue->presentKHR(
@@ -1471,7 +1517,6 @@ namespace gfx {
 			throw std::runtime_error { "Failed to present swapchain image!" };
 		}
 		
-		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Evaluating swapchain state..." );
 		if ( mShouldRemakeSwapchain
 //		or   presentResult == vk::Result::eSuboptimalKHR // TEMP disable
 		or   presentResult == vk::Result::eErrorOutOfDateKHR )
@@ -1482,7 +1527,6 @@ namespace gfx {
 			return; // TODO: verify that this is needed
 		}
 		
-		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Finishing draw!" );
 		++mCurrentFrame;
 	} // end-of-function: Renderer::operator()
 	

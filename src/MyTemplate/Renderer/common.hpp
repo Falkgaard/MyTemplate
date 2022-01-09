@@ -6,6 +6,9 @@
 #include "MyTemplate/Common/aliases.hpp"
 #include "MyTemplate/Common/utility.hpp"
 
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_raii.hpp>
+
 // TODO: split enums, structs, and forward declarations into separate files and include them
 // TODO: move relevant stuff into specific classes (e.g. Renderer)
 
@@ -45,13 +48,13 @@
 			eSingle = 1,
 			eDouble = 2,
 			eTriple = 3,
-		}; // end-of-enum-struct: gfx::FramebufferingPriority
+		}; // end-of-enum-struct: FramebufferingPriority
 		
 		enum struct PresentationPriority {
 			eMinimalLatency         ,
 			eMinimalStuttering      ,
 			eMinimalPowerConsumption,
-		}; // end-of-enum-struct: gfx::PresentationPriority
+		}; // end-of-enum-struct: PresentationPriority
 	} // end-of-namespace: gfx
 
 
@@ -63,7 +66,12 @@
 			u32  graphicsIndex { kUndefined };
 			u32  transferIndex { kUndefined };
 			bool areSeparate   { false      };
-		}; // end-of-struct: gfx::QueueFamilyIndices
+		}; // end-of-struct: QueueFamilyIndices
+		
+		struct Buffer {
+			vk::raii::Buffer        handle;
+			vk::raii::DeviceMemory  memory;
+		}; // end-of-struct: Buffer
 	} // end-of-namespace: gfx
 
 

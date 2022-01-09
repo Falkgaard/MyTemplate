@@ -36,10 +36,8 @@ namespace gfx {
 			void                                                    selectQueueFamilies();
 			void                                                    makeLogicalDevice();
 			[[nodiscard]] std::unique_ptr<vk::raii::Queue>          makeQueue( u32 const queueFamilyIndex, u32 const queueIndex );
-			void                                                    makeGraphicsQueue();
-			void                                                    makePresentQueue();
-			void                                                    makeTransferQueue();
-			void                                                    makeCommandPool();
+			void                                                    makeQueues();
+			void                                                    makeCommandPools();
 			[[nodiscard]] std::unique_ptr<vk::raii::CommandBuffers> makeCommandBuffers( vk::CommandBufferLevel const, u32 const bufferCount );
 			void                                                    selectSurfaceFormat();
 			void                                                    selectSurfaceExtent();
@@ -53,7 +51,9 @@ namespace gfx {
 			void                                                    makeRenderPass(); // TODO: rename?
 			void                                                    makeGraphicsPipeline();
 			[[nodiscard]] u32                                       findMemoryTypeIndex( u32 const typeFilter, vk::MemoryPropertyFlags const ) const;
-			void                                                    makeVertexBuffers();
+			[[nodiscard]] std::unique_ptr<Buffer>                   makeBuffer( vk::BufferUsageFlags const, vk::DeviceSize const, vk::MemoryPropertyFlags const );
+			void                                                    copy( Buffer const &src, Buffer &dst, vk::DeviceSize const );
+			void                                                    makeVertexBuffer();
 			void                                                    makeFramebuffers();
 			void                                                    makeCommandBuffers();
 			void                                                    makeSyncPrimitives();
@@ -73,7 +73,9 @@ namespace gfx {
 			std::unique_ptr<vk::raii::Device>                    mpDevice                         ;
 			std::unique_ptr<vk::raii::Queue>                     mpGraphicsQueue                  ;
 			std::unique_ptr<vk::raii::Queue>                     mpPresentQueue                   ;
-			std::unique_ptr<vk::raii::CommandPool>               mpCommandPool                    ;
+			std::unique_ptr<vk::raii::Queue>                     mpTransferQueue                  ;
+			std::unique_ptr<vk::raii::CommandPool>               mpGraphicsCommandPool            ;
+			std::unique_ptr<vk::raii::CommandPool>               mpTransferCommandPool            ;
 			// dynamic:
 			vk::SurfaceFormatKHR                                 mSurfaceFormat                   ;
 			vk::SurfaceCapabilitiesKHR                           mSurfaceCapabilities             ;
@@ -83,8 +85,7 @@ namespace gfx {
 			std::unique_ptr<vk::raii::SwapchainKHR>              mpSwapchain                      ;
 			std::vector<VkImage>                                 mImages                          ;
 			std::vector<vk::raii::ImageView>                     mImageViews                      ;
-			std::unique_ptr<vk::raii::Buffer>                    mpVertexBuffer                   ;
-			std::unique_ptr<vk::raii::DeviceMemory>              mpVertexBufferMemory             ;
+			std::unique_ptr<Buffer>                              mpVertexBuffer                   ;
 			std::unique_ptr<vk::raii::CommandBuffers>            mpCommandBuffers                 ; // NOTE: Must be deleted before command pool!
 			std::unique_ptr<vk::raii::ShaderModule>              mpVertexShaderModule             ;
 			std::unique_ptr<vk::raii::ShaderModule>              mpFragmentShaderModule           ;
