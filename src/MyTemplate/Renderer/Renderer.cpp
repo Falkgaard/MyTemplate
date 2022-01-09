@@ -1243,7 +1243,7 @@ namespace gfx {
 		
 
 		spdlog::info( "... creating staging buffer" );
-		vk::DeviceSize const size { triangle.size() * sizeof(Vertex2D) };
+		vk::DeviceSize const size { kRectangleVertices.size() * sizeof(Vertex2D) };
 		auto stagingBuffer = makeBuffer(
 			vk::BufferUsageFlagBits::eTransferSrc,
 			size,
@@ -1254,7 +1254,7 @@ namespace gfx {
 		auto *mappedMemory { stagingBuffer->memory.mapMemory( 0, size ) };
 		
 		spdlog::info( "... copying vertex data to staging buffer's memory" );
-		std::memcpy( mappedMemory, triangle.data(), static_cast<std::size_t>(size) );
+		std::memcpy( mappedMemory, kRectangleVertices.data(), static_cast<std::size_t>(size) );
 		// NOTE: if not using host coherent memory (which we are),
 		// call flushMappedMemoryRanges here and invalidateMappedMemoryRanges before reading it
 		spdlog::info( "... unmapping memory" );
@@ -1270,6 +1270,47 @@ namespace gfx {
 		copy( *stagingBuffer, *mpVertexBuffer, size );
 		spdlog::info( "... done!" );
 	} // end-of-function: Renderer::makeVertexBuffer
+	
+	
+	
+	void
+	Renderer::makeIndexBuffer()
+	{
+		spdlog::info( "Creating index buffer..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpDevice != nullptr );
+		
+
+		spdlog::info( "... creating staging buffer" );
+		vk::DeviceSize const size { kRectangleIndices.size() * sizeof(u16) };
+		auto stagingBuffer = makeBuffer(
+			vk::BufferUsageFlagBits::eTransferSrc,
+			size,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+		
+		spdlog::info( "... mapping staging buffer memory to CPU memory" );
+		auto *mappedMemory { stagingBuffer->memory.mapMemory( 0, size ) };
+	   
+		spdlog::info( "... copying index data to staging buffer's memory" );
+		std::memcpy( mappedMemory, kRectangleIndices.data(), static_cast<std::size_t>(size) );
+		// NOTE: if not using host coherent memory (which we are),
+		// call flushMappedMemoryRanges here and invalidateMappedMemoryRanges before reading it
+		spdlog::info( "... unmapping memory" );
+		stagingBuffer->memory.unmapMemory();
+		
+		spdlog::info( "... creating vertex buffer" );
+		mpIndexBuffer = makeBuffer(
+			vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
+			size,
+			vk::MemoryPropertyFlagBits::eDeviceLocal
+		);
+		spdlog::info( "... copying data from staging buffer memory to index buffer memory" );
+		copy( *stagingBuffer, *mpIndexBuffer, size );
+		spdlog::info( "... done!" );
+	} // end-of-function: Renderer::makeIndexBuffer
 	
 	
 	
@@ -1313,13 +1354,15 @@ namespace gfx {
 			// TODO(later): 	nullptr
 			// TODO(later): );
 			commandBuffer.bindVertexBuffers( 0, { *mpVertexBuffer->handle }, { 0 } );
+			commandBuffer.bindIndexBuffer( *mpIndexBuffer->handle, 0, vk::IndexType::eUint16 );
 			// NOTE(possibility): command_buffer.bindDescriptorSets()
 			// NOTE(possibility): command_buffer.setViewport()
 			// NOTE(possibility): command_buffer.setScissor()
-			commandBuffer.draw(
-				static_cast<u32>( triangle.size() ), // vertex count
+			commandBuffer.drawIndexed(
+				static_cast<u32>( kRectangleIndices.size() ), // index count
 				1, // instance count
-				0, // first vertex
+				0, // first index
+				0, // vertex offset
 				0  // first instance
 			);
 			commandBuffer.endRenderPass();
@@ -1410,6 +1453,7 @@ namespace gfx {
 		makeGraphicsPipeline();
 		makeFramebuffers();
 		makeVertexBuffer();
+		makeIndexBuffer();
 		makeCommandBuffers();
 		makeSyncPrimitives(); // TODO(config): refactor so it is updated whenever framebuffer count changes
 	//instance

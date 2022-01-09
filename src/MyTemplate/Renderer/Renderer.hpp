@@ -54,6 +54,7 @@ namespace gfx {
 			[[nodiscard]] std::unique_ptr<Buffer>                   makeBuffer( vk::BufferUsageFlags const, vk::DeviceSize const, vk::MemoryPropertyFlags const );
 			void                                                    copy( Buffer const &src, Buffer &dst, vk::DeviceSize const );
 			void                                                    makeVertexBuffer();
+			void                                                    makeIndexBuffer();
 			void                                                    makeFramebuffers();
 			void                                                    makeCommandBuffers();
 			void                                                    makeSyncPrimitives();
@@ -86,6 +87,7 @@ namespace gfx {
 			std::vector<VkImage>                                 mImages                          ;
 			std::vector<vk::raii::ImageView>                     mImageViews                      ;
 			std::unique_ptr<Buffer>                              mpVertexBuffer                   ;
+			std::unique_ptr<Buffer>                              mpIndexBuffer                    ;
 			std::unique_ptr<vk::raii::CommandBuffers>            mpCommandBuffers                 ; // NOTE: Must be deleted before command pool!
 			std::unique_ptr<vk::raii::ShaderModule>              mpVertexShaderModule             ;
 			std::unique_ptr<vk::raii::ShaderModule>              mpFragmentShaderModule           ;

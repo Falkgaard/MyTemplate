@@ -12,6 +12,8 @@
 // #include <glm/ext/matrix_clip_space.hpp>
 // #include <glm/ext/scalar_constants.hpp><
 
+#include "MyTemplate/Common/aliases.hpp"
+
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -96,10 +98,15 @@ namespace gfx {
 	
 	
 	// Temp for test1 (TODO: remove)
-	inline static std::array constexpr triangle {
-		Vertex2D { .xy = {  0.0f, -0.5f }, .rgb = { +1.0f,  0.0f,  0.0f } },
-		Vertex2D { .xy = { +0.5f, +0.5f }, .rgb = {  0.0f, +1.0f,  0.0f } },
-		Vertex2D { .xy = { -0.5f, +0.5f }, .rgb = {  0.0f,  0.0f, +1.0f } }
+	inline static std::array<Vertex2D,4> constexpr kRectangleVertices {
+		Vertex2D { .xy = { -0.5f, -0.5f }, .rgb = { +1.0f,  0.0f,  0.0f } },
+		Vertex2D { .xy = { +0.5f, -0.5f }, .rgb = {  0.0f, +1.0f,  0.0f } },
+		Vertex2D { .xy = { +0.5f, +0.5f }, .rgb = {  0.0f,  0.0f, +1.0f } },
+		Vertex2D { .xy = { -0.5f, +0.5f }, .rgb = { +1.0f, +1.0f,  0.0f } }
+	};
+	
+	inline static std::array<u16,6> constexpr kRectangleIndices {
+		0, 1, 2, 2, 3, 0
 	};
 	
 } // end-of-namespace: gfx
