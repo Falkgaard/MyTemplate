@@ -1176,8 +1176,7 @@ namespace gfx {
 		// TODO(refactor)
 		spdlog::debug( "Generating dynamic state..." );
 		
-		mpWindow->waitResize();
-		mpDevice->waitIdle();
+
 		
 		// delete previous state (if any) in the right order:
 		mImages.clear();
@@ -1196,6 +1195,9 @@ namespace gfx {
 		assert( mpCommandBuffers   == nullptr );
 		assert( mpGraphicsPipeline == nullptr );
 		assert( mpSwapchain        == nullptr );
+		
+		mpWindow->waitResize();
+		mpDevice->waitIdle();	
 		
 		makeSwapchain();
 		makeGraphicsPipeline();
@@ -1263,7 +1265,7 @@ namespace gfx {
 	Renderer::operator()()
 	{
 		auto const frame = mCurrentFrame % kMaxConcurrentFrames;
-		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
+		if constexpr ( true /*TODO: kIsDebugMode*/ ) spdlog::info( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
 		
 		if constexpr ( kIsDebugMode ) spdlog::debug( "[draw]: Waiting... (draw fence)" );
 		{
