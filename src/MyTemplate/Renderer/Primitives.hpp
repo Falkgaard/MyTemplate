@@ -28,10 +28,10 @@ namespace gfx {
 		glm::vec2 xy;  // 2D position
 		glm::vec3 rgb; // colour
 		static const vk::VertexInputBindingDescription                 kVertexInputBindingDescription; 
-		static const std::array<vk::VertexInputAttributeDescription,2> kVertexInputAttributeDescription;
+		static const std::array<vk::VertexInputAttributeDescription,2> kVertexInputAttributeDescriptions;
 	}; // end-of-struct: Vertex2D
 	
-	const vk::VertexInputBindingDescription
+	inline const vk::VertexInputBindingDescription
 	Vertex2D::kVertexInputBindingDescription {
 		vk::VertexInputBindingDescription {
 			.binding   = 0, // TODO(doc): pipeline pBuffers index?
@@ -40,8 +40,8 @@ namespace gfx {
 		}
 	};
 	
-	const std::array<vk::VertexInputAttributeDescription,2>
-	Vertex2D::kVertexInputAttributeDescription {
+	inline const std::array<vk::VertexInputAttributeDescription,2>
+	Vertex2D::kVertexInputAttributeDescriptions {
 		{ // XY:
 			vk::VertexInputAttributeDescription {
 				.location  = 0, // vertex shader location
@@ -64,10 +64,10 @@ namespace gfx {
 		glm::vec2 xyz; // 3D position
 		glm::vec3 rgb; // colour
 		static const vk::VertexInputBindingDescription                 kVertexInputBindingDescription; 
-		static const std::array<vk::VertexInputAttributeDescription,2> kVertexInputAttributeDescription;
+		static const std::array<vk::VertexInputAttributeDescription,2> kVertexInputAttributeDescriptions;
 	}; // end-of-struct: Vertex3D
 	
-	const vk::VertexInputBindingDescription
+	inline const vk::VertexInputBindingDescription
 	Vertex3D::kVertexInputBindingDescription {
 		vk::VertexInputBindingDescription {
 			.binding   = 0, // TODO(doc): pipeline pBuffers index?
@@ -76,8 +76,8 @@ namespace gfx {
 		}
 	};
 	
-	const std::array<vk::VertexInputAttributeDescription,2>
-	Vertex3D::kVertexInputAttributeDescription {
+	inline const std::array<vk::VertexInputAttributeDescription,2>
+	Vertex3D::kVertexInputAttributeDescriptions {
 		{ // XYZ:
 			vk::VertexInputAttributeDescription {
 				.location  = 0, // vertex shader location
@@ -96,11 +96,11 @@ namespace gfx {
 	
 	
 	// Temp for test1 (TODO: remove)
-	inline static auto constexpr triangle = std::to_array<Vertex2D>(
-		{ {  0.0f, -0.5f }, { +1.0f,  0.0f,  0.0f } },
-		{ { +0.5f, +0.5f }, {  0.0f, +1.0f,  0.0f } },
-		{ { -0.5f, +0.5f }, {  0.0f,  0.0f, +1.0f } }
-	);
+	inline static std::array constexpr triangle {
+		Vertex2D { .xy = {  0.0f, -0.5f }, .rgb = { +1.0f,  0.0f,  0.0f } },
+		Vertex2D { .xy = { +0.5f, +0.5f }, .rgb = {  0.0f, +1.0f,  0.0f } },
+		Vertex2D { .xy = { -0.5f, +0.5f }, .rgb = {  0.0f,  0.0f, +1.0f } }
+	};
 	
 } // end-of-namespace: gfx
 

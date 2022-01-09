@@ -1,7 +1,9 @@
 #include "MyTemplate/Renderer/Renderer.hpp"
+#include "MyTemplate/Common/aliases.hpp"
 #include "MyTemplate/Renderer/common.hpp"	
 #include "MyTemplate/Renderer/GlfwInstance.hpp"
 #include "MyTemplate/Renderer/Window.hpp"
+#include "MyTemplate/Renderer/Primitives.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -104,6 +106,24 @@ namespace gfx {
 			}
 		} // end-of-function: loadBinaryFromFile()
 	} // end-of-unnamed-namespace	
+	
+	
+	
+	[[nodiscard]] u32
+	Renderer::findMemoryTypeIndex( u32 const typeFilter, vk::MemoryPropertyFlags const flags ) const
+	{
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpPhysicalDevice != nullptr );
+		
+		auto const memoryProperties { mpPhysicalDevice->getMemoryProperties() };
+		for ( u32 i{0};  i < memoryProperties.memoryTypeCount;  ++i ) 
+			if ( (typeFilter & (1 << i))
+			and  (memoryProperties.memoryTypes[i].propertyFlags & flags) == flags )
+				return i;
+		
+		throw std::runtime_error { "Unable to find an index of a suitable memory type!" };
+	} // end-of-function: Renderer::findMemoryTypeIndex
 	
 	
 	
@@ -306,9 +326,10 @@ namespace gfx {
 		
 		if ( bestScore > 0 ) [[likely]] {
 			spdlog::info(
-				"... selected physical device `{}` with a final score of: {}", pBestMatch->getProperties().deviceName.data(), bestScore
+				"... selected physical device `{}` with a final score of: {}",
+				pBestMatch->getProperties().deviceName.data(), bestScore
 			);
-			mpPhysicalDevice = std::make_unique<vk::raii::PhysicalDevice>( std::move( *pBestMatch ) );
+			mpPhysicalDevice                 = std::make_unique<vk::raii::PhysicalDevice>( std::move( *pBestMatch ) );
 		}
 		else [[unlikely]]
 			throw std::runtime_error { "Physical device does not support swapchains!" };
@@ -835,7 +856,13 @@ namespace gfx {
 	Renderer::makeShaderModuleFromFile( std::string const &shaderSpirvBytecodeFilename ) const
 	{
 		spdlog::info( "Creating a shader module from shader SPIR-V bytecode file..." );
-		return makeShaderModuleFromBinary( loadBinaryFromFile( shaderSpirvBytecodeFilename ) );
+		try {
+			return makeShaderModuleFromBinary( loadBinaryFromFile( shaderSpirvBytecodeFilename ) );
+		}
+		catch( std::runtime_error const &e ) {
+			spdlog::error( "Failed to load shader binary from file! Check path and/or re-compile shaders." );
+			throw e;
+		}
 	} // end-of-function: Renderer::makeShaderModuleFromFile
 	
 	
@@ -919,8 +946,8 @@ namespace gfx {
 		assert( mpDevice       != nullptr );
 		
 		spdlog::info( "Creating shader modules..." );
-		auto const vertexModule   = makeShaderModuleFromFile( "../dat/shaders/test.vert.spv" );
-		auto const fragmentModule = makeShaderModuleFromFile( "../dat/shaders/test.frag.spv" );	
+		auto const vertexModule   = makeShaderModuleFromFile( "../dat/shaders/test1.vert.spv" );
+		auto const fragmentModule = makeShaderModuleFromFile( "../dat/shaders/test1.frag.spv" );	
 		
 		spdlog::info( "Creating pipeline shader stages..." );
 		vk::PipelineShaderStageCreateInfo const shaderStageCreateInfo[] {
@@ -941,10 +968,10 @@ namespace gfx {
 		// WHAT: configures the vertex data format (spacing, instancing, loading...)
 		vk::PipelineVertexInputStateCreateInfo const vertexInputStateCreateInfo {
 			// NOTE: no data here since it's hardcoded (for now)
-			.vertexBindingDescriptionCount   = 0,
-			.pVertexBindingDescriptions      = nullptr,
-			.vertexAttributeDescriptionCount = 0,
-			.pVertexAttributeDescriptions    = nullptr
+			.vertexBindingDescriptionCount   =  1,
+			.pVertexBindingDescriptions      = &Vertex2D::kVertexInputBindingDescription,
+			.vertexAttributeDescriptionCount =  static_cast<u32>( Vertex2D::kVertexInputAttributeDescriptions.size() ),
+			.pVertexAttributeDescriptions    =  Vertex2D::kVertexInputAttributeDescriptions.data()
 		};
 		
 		// WHAT: configures the primitive topology of the geometry
@@ -1087,6 +1114,71 @@ namespace gfx {
 		}
 	} // end-of-function: Renderer::makeFramebuffers	
 	
+	void
+	Renderer::makeVertexBuffers()
+	{
+		spdlog::info( "Creating vertex buffer(s)..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpDevice     != nullptr );
+		
+		auto const vertexBufferSize { triangle.size() * sizeof(Vertex2D) };
+		
+		spdlog::info( "... creating buffer(s)" );
+		mpVertexBuffer = std::make_unique<vk::raii::Buffer>(
+			*mpDevice,
+			vk::BufferCreateInfo {
+				.size        = vertexBufferSize,
+				.usage       = vk::BufferUsageFlagBits::eVertexBuffer,
+				.sharingMode = vk::SharingMode::eExclusive, // will only be used by graphics queue
+			}
+		);
+		
+		auto const memoryRequirements {
+			mpVertexBuffer->getMemoryRequirements()
+		};
+		
+		auto const memoryPropertiesFlags {
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		};
+		
+		vk::MemoryAllocateInfo const allocateInfo {
+			.allocationSize  = memoryRequirements.size,
+			.memoryTypeIndex = findMemoryTypeIndex(
+			                      memoryRequirements.memoryTypeBits,
+			                      memoryPropertiesFlags
+			                 )
+		};
+		
+		spdlog::info( "... allocating device memory" );
+		mpVertexBufferMemory = std::make_unique<vk::raii::DeviceMemory>(
+			std::move(
+				mpDevice->allocateMemory(
+					{
+						.allocationSize  = memoryRequirements.size,
+						.memoryTypeIndex = findMemoryTypeIndex(
+						                      memoryRequirements.memoryTypeBits,
+						                      memoryPropertiesFlags
+						                 )
+					}
+				)
+			)
+		);
+		
+		spdlog::info( "... binding memory to buffer" );
+		mpVertexBuffer->bindMemory( **mpVertexBufferMemory, 0 );
+		// TODO(later): free memory somewhere after done?
+		
+		spdlog::info( "... binding memory to buffer" );
+		auto *mappedMemory { mpVertexBufferMemory->mapMemory( 0, vertexBufferSize ) };
+		std::memcpy( mappedMemory, triangle.data(), vertexBufferSize );
+		// NOTE: if not using host coherent memory (which we are),
+		// call flushMappedMemoryRanges here and invalidateMappedMemoryRanges before reading it
+		mpVertexBufferMemory->unmapMemory();
+		spdlog::info( "... done!" );
+	}
+	
 	
 	
 	void
@@ -1128,12 +1220,12 @@ namespace gfx {
 			// TODO(later): 	{ *descriptorSet },
 			// TODO(later): 	nullptr
 			// TODO(later): );
-			// TODO(later): commandBuffer.bindVertexBuffers( 0, { *vertexBuffer }, { 0 } );
+			commandBuffer.bindVertexBuffers( 0, { **mpVertexBuffer }, { 0 } );
 			// NOTE(possibility): command_buffer.bindDescriptorSets()
 			// NOTE(possibility): command_buffer.setViewport()
 			// NOTE(possibility): command_buffer.setScissor()
 			commandBuffer.draw(
-				3, // vertex count
+				static_cast<u32>( triangle.size() ), // vertex count
 				1, // instance count
 				0, // first vertex
 				0  // first instance
@@ -1210,6 +1302,7 @@ namespace gfx {
 		mCurrentFrame          { 0     }
 	{
 		spdlog::info( "Constructing a Renderer instance..." );
+		// "fixed" part:
 		mpGlfwInstance = std::make_unique<GlfwInstance>();
 		makeVkContext();
 		makeVkInstance();
@@ -1220,10 +1313,12 @@ namespace gfx {
 		makeLogicalDevice();
 		makeGraphicsQueue();
 		makePresentQueue();
+		makeCommandPool();
+		// "dynamic" part:
 		makeSwapchain();
 		makeGraphicsPipeline();
 		makeFramebuffers();
-		makeCommandPool();
+		makeVertexBuffers();
 		makeCommandBuffers();
 		makeSyncPrimitives(); // TODO(config): refactor so it is updated whenever framebuffer count changes
 	//instance
