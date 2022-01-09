@@ -9,7 +9,7 @@
 // TODO: split enums, structs, and forward declarations into separate files and include them
 // TODO: move relevant stuff into specific classes (e.g. Renderer)
 
-// forward declarations:
+// forward declarations: (TODO: remove unused ones?)
 	class GLFWwindow;
 	namespace vk::raii {
 		class CommandPool;
@@ -58,9 +58,10 @@
 // POD structs:
 	namespace gfx {
 		struct QueueFamilyIndices {
-			static inline u32 constexpr kUndefined { max<u32> };
+			inline static u32 constexpr kUndefined { max<u32> };
 			u32  presentIndex  { kUndefined };
 			u32  graphicsIndex { kUndefined };
+			u32  transferIndex { kUndefined };
 			bool areSeparate   { false      };
 		}; // end-of-struct: gfx::QueueFamilyIndices
 	} // end-of-namespace: gfx

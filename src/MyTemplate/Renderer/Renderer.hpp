@@ -38,6 +38,7 @@ namespace gfx {
 			[[nodiscard]] std::unique_ptr<vk::raii::Queue>          makeQueue( u32 const queueFamilyIndex, u32 const queueIndex );
 			void                                                    makeGraphicsQueue();
 			void                                                    makePresentQueue();
+			void                                                    makeTransferQueue();
 			void                                                    makeCommandPool();
 			[[nodiscard]] std::unique_ptr<vk::raii::CommandBuffers> makeCommandBuffers( vk::CommandBufferLevel const, u32 const bufferCount );
 			void                                                    selectSurfaceFormat();

@@ -447,43 +447,52 @@ namespace gfx {
 		//   should be undefined unless the function has been called multiple times (which it shouldn't)
 		assert( mQueueFamilyIndices.presentIndex  == QueueFamilyIndices::kUndefined );
 		assert( mQueueFamilyIndices.graphicsIndex == QueueFamilyIndices::kUndefined );
+		assert( mQueueFamilyIndices.transferIndex == QueueFamilyIndices::kUndefined );
 		
 		std::optional<u32> maybePresentIndex  {};
 		std::optional<u32> maybeGraphicsIndex {};
+		std::optional<u32> maybeTransferIndex {};
+		bool hasFoundDualSupport { false }; // assume false until present-graphics supporting queue family is found
 		auto const &queueFamilyProperties { mpPhysicalDevice->getQueueFamilyProperties() };
 		
-		spdlog::info( "Searching for graphics queue family..." );
 		for ( u32 index{0};  index < queueFamilyProperties.size();  ++index ) {
 			bool const supportsGraphics { queueFamilyProperties[index].queueFlags & vk::QueueFlagBits::eGraphics };
 			bool const supportsPresent  { mpPhysicalDevice->getSurfaceSupportKHR( index, *mpWindow->getSurface() ) == VK_TRUE };
+			bool const supportsTransfer { queueFamilyProperties[index].queueFlags & vk::QueueFlagBits::eTransfer };
 			
 			spdlog::info( "... Evaluating queue family index {}:", index );
-			spdlog::info( "    ...  present support: {}", supportsPresent  ? "OK!" : "missing!" );
-			spdlog::info( "    ... graphics support: {}", supportsGraphics ? "OK!" : "missing!" );
-			if ( supportsGraphics and supportsPresent ) {
-				maybePresentIndex  = index;
-				maybeGraphicsIndex = index;
-				break;
+			spdlog::info( "    ...  present support: {}", supportsPresent  ? "yes" : "no" );
+			spdlog::info( "    ... graphics support: {}", supportsGraphics ? "yes" : "no" );
+			spdlog::info( "    ... graphics support: {}", supportsTransfer ? "yes" : "no" );
+			if ( not hasFoundDualSupport ) {
+				if ( supportsGraphics and supportsPresent ) {
+					maybePresentIndex   = index;
+					maybeGraphicsIndex  = index;
+					hasFoundDualSupport = true;
+				}
+				else if ( supportsGraphics )
+					maybeGraphicsIndex = index;
+				else if ( supportsPresent )
+					maybePresentIndex  = index;
 			}
-			else if ( supportsGraphics )
-				maybeGraphicsIndex = index;
-			else if ( supportsPresent )
-				maybePresentIndex  = index;
+			if ( supportsTransfer and not supportsGraphics )
+				maybeTransferIndex = index;
 		}
 		
-		if ( maybePresentIndex.has_value() and maybeGraphicsIndex.has_value() ) [[likely]] {
+		if ( maybePresentIndex.has_value() and maybeGraphicsIndex.has_value() and maybeTransferIndex.value() ) [[likely]] {
 			mQueueFamilyIndices = QueueFamilyIndices {
 				.presentIndex  = maybePresentIndex.value(),
 				.graphicsIndex = maybeGraphicsIndex.value(),
-				.areSeparate   = maybePresentIndex.value() != maybeGraphicsIndex.value()
+				.transferIndex = maybeTransferIndex.value(),
+				.areSeparate   = not hasFoundDualSupport
 			};
 			if ( mQueueFamilyIndices.areSeparate ) [[unlikely]]
 				spdlog::info( "... selected different queue families for graphics and present." );
 			else [[likely]]
-				spdlog::info( "... ideal queue family was found!" );
+				spdlog::info( "... ideal queue family was found graphics and present!" );
 		}
 		else [[unlikely]]
-			throw std::runtime_error { "Queue family support for either graphics or present missing!" };
+			throw std::runtime_error { "Queue family support for either graphics, present, or transfer is missing!" };
 	} // end-of-function: Renderer::select_queue_family_indices
 	
 	
@@ -525,15 +534,23 @@ namespace gfx {
 			);
 		}
 		
+		createInfos.push_back(
+			vk::DeviceQueueCreateInfo {
+				.queueFamilyIndex =  mQueueFamilyIndices.transferIndex,
+				.queueCount       =  1,
+				.pQueuePriorities = &presentQueuePriority
+			}
+		);
+		
 		mpDevice = std::make_unique<vk::raii::Device>(
 			*mpPhysicalDevice,
 			vk::DeviceCreateInfo {
 				.queueCreateInfoCount    = static_cast<u32>( createInfos.size() ),
 				.pQueueCreateInfos       = createInfos.data(),
-				.enabledLayerCount       = 0,
-				.ppEnabledLayerNames     = nullptr,
-				.enabledExtensionCount   = static_cast<u32>( kRequiredDeviceExtensions.size() ), // TODO
-				.ppEnabledExtensionNames = kRequiredDeviceExtensions.data(),                     // TODO
+				.enabledLayerCount       = 0,       // TODO(verify): deprecated
+				.ppEnabledLayerNames     = nullptr, // TODO(verify): deprecated
+				.enabledExtensionCount   = static_cast<u32>( kRequiredDeviceExtensions.size() ), // TODO(member)
+				.ppEnabledExtensionNames = kRequiredDeviceExtensions.data(),                     // TODO(member)
 			}
 		);
 	} // end-of-function: Renderer::makeLogicalDevice
@@ -563,7 +580,8 @@ namespace gfx {
 		
 		// pre-condition(s):
 		//   should be null unless the function has been called multiple times (which it shouldn't):
-		assert( mpGraphicsQueue == nullptr ); 
+		assert( mpGraphicsQueue              == nullptr                        ); 
+		assert( mQueueFamilyIndices.graphics == QueueFamilyIndices::kUndefined ); 
 		
 		mpGraphicsQueue = makeQueue( mQueueFamilyIndices.graphicsIndex, 0 );
 	} // end-of-function: Renderer::makeGraphicsQueue
@@ -577,11 +595,28 @@ namespace gfx {
 		spdlog::info( "Creating a present queue..." );
 		
 		// pre-condition(s):
-		//	  should be null unless the function has been called multiple times (which it shouldn't):
-		assert( mpPresentQueue == nullptr ); 
+		//   should be null unless the function has been called multiple times (which it shouldn't):
+		assert( mpPresentQueue              == nullptr                        ); 
+		assert( mQueueFamilyIndices.present == QueueFamilyIndices::kUndefined ); 
 		
-		mpPresentQueue = makeQueue( mQueueFamilyIndices.presentIndex, mQueueFamilyIndices.areSeparate ? 1 : 0 );
+		mpPresentQueue = makeQueue( mQueueFamilyIndices.presentIndex, 0 );
 	} // end-of-function: Renderer::makePresentQueue
+	
+	
+	
+	void
+	Renderer::makeTransferQueue()
+	{
+		// Just using one queue for now. TODO(1.0)
+		spdlog::info( "Creating a transfer queue..." );
+		
+		// pre-condition(s):
+		//   should be null unless the function has been called multiple times (which it shouldn't):
+		assert( mpTransferQueue              == nullptr                        ); 
+		assert( mQueueFamilyIndices.transfer == QueueFamilyIndices::kUndefined ); 
+		
+		mpPresentQueue = makeQueue( mQueueFamilyIndices.transferIndex, 0 );
+	} // end-of-function: Renderer::makeTransferQueue
 	
 	
 	
@@ -594,7 +629,7 @@ namespace gfx {
 		//   shouldn't be null or undefined unless the function is called in the wrong order:
 		assert( mpGraphicsQueue                   != nullptr                        ); 
 		assert( mQueueFamilyIndices.graphicsIndex != QueueFamilyIndices::kUndefined ); 
-		//	  should be null unless the function has been called multiple times (which it shouldn't):
+		//   should be null unless the function has been called multiple times (which it shouldn't):
 		assert( mpCommandPool == nullptr ); 
 		
 		mpCommandPool = std::make_unique<vk::raii::CommandPool>(
@@ -780,8 +815,7 @@ namespace gfx {
 		selectPresentMode();
 		selectFramebufferCount();
 		
-		// temporary array:
-		u32 queueFamilyIndicesArray[] {
+		u32 const queueFamilyIndices[] {
 			mQueueFamilyIndices.presentIndex,
 			mQueueFamilyIndices.graphicsIndex
 		};
@@ -798,7 +832,7 @@ namespace gfx {
 				.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // TODO(later): eTransferDst for post-processing
 				.imageSharingMode      =  mQueueFamilyIndices.areSeparate ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
 				.queueFamilyIndexCount =  mQueueFamilyIndices.areSeparate ?                           2u : 0u,
-				.pQueueFamilyIndices   =  mQueueFamilyIndices.areSeparate ?      queueFamilyIndicesArray : nullptr,
+				.pQueueFamilyIndices   =  mQueueFamilyIndices.areSeparate ?           queueFamilyIndices : nullptr,
 				.preTransform          =  mSurfaceCapabilities.currentTransform,
 				.compositeAlpha        =  vk::CompositeAlphaFlagBitsKHR::eOpaque,
 				.presentMode           =  mPresentMode,
@@ -1124,14 +1158,19 @@ namespace gfx {
 		assert( mpDevice     != nullptr );
 		
 		auto const vertexBufferSize { triangle.size() * sizeof(Vertex2D) };
-		
+		u32  const queueFamilyIndices[] {
+			mQueueFamilyIndices.graphicsIndex,
+			mQueueFamilyIndices.presentIndex
+		};
 		spdlog::info( "... creating buffer(s)" );
 		mpVertexBuffer = std::make_unique<vk::raii::Buffer>(
 			*mpDevice,
 			vk::BufferCreateInfo {
-				.size        = vertexBufferSize,
-				.usage       = vk::BufferUsageFlagBits::eVertexBuffer,
-				.sharingMode = vk::SharingMode::eExclusive, // will only be used by graphics queue
+				.size                  = vertexBufferSize,
+				.usage                 = vk::BufferUsageFlagBits::eVertexBuffer,
+				.sharingMode           = vk::SharingMode::eConcurrent,
+				.queueFamilyIndexCount = 2,
+				.pQueueFamilyIndices   = queueFamilyIndices
 			}
 		);
 		
@@ -1309,7 +1348,7 @@ namespace gfx {
 		maybeMakeDebugMessenger();
 		mpWindow = std::make_unique<Window>( *mpGlfwInstance, *mpVkInstance, mShouldRemakeSwapchain );
 		selectPhysicalDevice();
-		selectQueueFamilies();
+		selectQueueFamilies(); // TODO: pick a better name
 		makeLogicalDevice();
 		makeGraphicsQueue();
 		makePresentQueue();
