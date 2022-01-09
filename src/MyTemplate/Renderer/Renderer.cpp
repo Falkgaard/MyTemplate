@@ -1176,8 +1176,6 @@ namespace gfx {
 		// TODO(refactor)
 		spdlog::debug( "Generating dynamic state..." );
 		
-
-		
 		// delete previous state (if any) in the right order:
 		mImages.clear();
 		mImageViews.clear();
