@@ -1049,9 +1049,9 @@ namespace gfx {
 		vk::PipelineVertexInputStateCreateInfo const vertexInputStateCreateInfo {
 			// NOTE: no data here since it's hardcoded (for now)
 			.vertexBindingDescriptionCount   =  1,
-			.pVertexBindingDescriptions      = &Vertex3D::kVertexInputBindingDescription,
-			.vertexAttributeDescriptionCount =  static_cast<u32>( Vertex3D::kVertexInputAttributeDescriptions.size() ),
-			.pVertexAttributeDescriptions    =  Vertex3D::kVertexInputAttributeDescriptions.data()
+			.pVertexBindingDescriptions      = &decltype(kCube)::VertexType::kVertexInputBindingDescription,
+			.vertexAttributeDescriptionCount =  static_cast<u32>( decltype(kCube)::VertexType::kVertexInputAttributeDescriptions.size() ),
+			.pVertexAttributeDescriptions    =  decltype(kCube)::VertexType::kVertexInputAttributeDescriptions.data()
 		};
 		
 		// WHAT: configures the primitive topology of the geometry

@@ -1,7 +1,7 @@
-Create Vulkan window (via GLEW?)
-Setup Vulkan pipeline
-Hook up ImGui
+Depth Buffer
+Additional render passes ( e.g. editorPass (floor grid, etc) )
 ...
+Hook up ImGui
 Asset loading
 Rendering
 etc
