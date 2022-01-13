@@ -4,6 +4,7 @@
 #include "MyTemplate/Renderer/GlfwInstance.hpp"
 #include "MyTemplate/Renderer/Window.hpp"
 #include "MyTemplate/Renderer/Primitives.hpp"
+#include "vulkan/vulkan_structs.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -17,7 +18,9 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/scalar_constants.hpp>
+#include <glm/gtx/string_cast.hpp>
 
+#include <iostream> // TEMP
 #include <ranges>
 #include <algorithm>
 #include <optional>
@@ -38,6 +41,7 @@ using namespace std::chrono;
 namespace gfx {	
 	namespace { // private (file-scope)
 		// TODO(config): refactor
+		bool                        constexpr kAllowPerFrameLogOutput     { false                                    };
 		u64                         constexpr kDrawWaitTimeout            { max<u64>                                 };
 		u32                         constexpr kMaxConcurrentFrames        { 3                                        };
 		PresentationPriority        constexpr kPresentationPriority       { PresentationPriority::eMinimalStuttering };
@@ -919,10 +923,10 @@ namespace gfx {
 		mpGraphicsPipelineLayout = std::make_unique<vk::raii::PipelineLayout>(
 			*mpDevice,
 			vk::PipelineLayoutCreateInfo {
-				.setLayoutCount         = 0,       // TODO: explain
-				.pSetLayouts            = nullptr, // TODO: explain
-				.pushConstantRangeCount = 0,       // TODO: explain
-				.pPushConstantRanges    = nullptr  // TODO: explain
+				.setLayoutCount         =    1,       // TODO: explain
+				.pSetLayouts            = &**mpDescriptorSetLayout, // TODO: explain
+				.pushConstantRangeCount =    0,       // TODO: explain
+				.pPushConstantRanges    =    nullptr  // TODO: explain
 			}
 		);
 	} // end-of-function: Renderer::makeGraphicsPipelineLayout
@@ -1005,7 +1009,8 @@ namespace gfx {
 			);
 		}
 		catch( vk::SystemError const &e ) {
-			spdlog::error( "Failed to create descriptor set layout! (`{}`)", e.what() );
+			spdlog::error( "Failed to create descriptor set layout!" );
+			throw e;
 		}
 	} // end-of-function: Renderer::makeDescriptorSetLayout
 	
@@ -1021,8 +1026,8 @@ namespace gfx {
 		assert( mpDevice != nullptr );
 		
 		spdlog::info( "Creating shader modules..." );
-		auto const vertexModule   = makeShaderModuleFromFile( "../dat/shaders/test1.vert.spv" );
-		auto const fragmentModule = makeShaderModuleFromFile( "../dat/shaders/test1.frag.spv" );	
+		auto const vertexModule   = makeShaderModuleFromFile( "../dat/shaders/test2.vert.spv" );
+		auto const fragmentModule = makeShaderModuleFromFile( "../dat/shaders/test2.frag.spv" );	
 		
 		spdlog::info( "Creating pipeline shader stages..." );
 		vk::PipelineShaderStageCreateInfo const shaderStageCreateInfo[] {
@@ -1044,9 +1049,9 @@ namespace gfx {
 		vk::PipelineVertexInputStateCreateInfo const vertexInputStateCreateInfo {
 			// NOTE: no data here since it's hardcoded (for now)
 			.vertexBindingDescriptionCount   =  1,
-			.pVertexBindingDescriptions      = &Vertex2D::kVertexInputBindingDescription,
-			.vertexAttributeDescriptionCount =  static_cast<u32>( Vertex2D::kVertexInputAttributeDescriptions.size() ),
-			.pVertexAttributeDescriptions    =  Vertex2D::kVertexInputAttributeDescriptions.data()
+			.pVertexBindingDescriptions      = &Vertex3D::kVertexInputBindingDescription,
+			.vertexAttributeDescriptionCount =  static_cast<u32>( Vertex3D::kVertexInputAttributeDescriptions.size() ),
+			.pVertexAttributeDescriptions    =  Vertex3D::kVertexInputAttributeDescriptions.data()
 		};
 		
 		// WHAT: configures the primitive topology of the geometry
@@ -1198,7 +1203,7 @@ namespace gfx {
 		vk::MemoryPropertyFlags const properties
 	)
 	{
-		spdlog::info( "Creating buffer..." );
+		spdlog::info( "... creating buffer" );
 		
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
@@ -1285,7 +1290,7 @@ namespace gfx {
 		
 
 		spdlog::info( "... creating staging buffer" );
-		vk::DeviceSize const size { kRectangleVertices.size() * sizeof(Vertex2D) };
+		vk::DeviceSize const size { kCubeVertices.size() * sizeof(Vertex3D) };
 		auto stagingBuffer = makeBuffer(
 			vk::BufferUsageFlagBits::eTransferSrc,
 			size,
@@ -1296,7 +1301,7 @@ namespace gfx {
 		auto *mappedMemory { stagingBuffer->memory.mapMemory( 0, size ) };
 		
 		spdlog::info( "... copying vertex data to staging buffer's memory" );
-		std::memcpy( mappedMemory, kRectangleVertices.data(), static_cast<std::size_t>(size) );
+		std::memcpy( mappedMemory, kCubeVertices.data(), static_cast<std::size_t>(size) );
 		// NOTE: if not using host coherent memory (which we are),
 		// call flushMappedMemoryRanges here and invalidateMappedMemoryRanges before reading it
 		spdlog::info( "... unmapping memory" );
@@ -1325,7 +1330,7 @@ namespace gfx {
 		assert( mpDevice != nullptr );
 		
 		spdlog::info( "... creating staging buffer" );
-		vk::DeviceSize const size { kRectangleIndices.size() * sizeof(u16) };
+		vk::DeviceSize const size { kCubeIndices.size() * sizeof(u16) };
 		auto stagingBuffer = makeBuffer(
 			vk::BufferUsageFlagBits::eTransferSrc,
 			size,
@@ -1336,7 +1341,7 @@ namespace gfx {
 		auto *mappedMemory { stagingBuffer->memory.mapMemory( 0, size ) };
 		   
 		spdlog::info( "... copying index data to staging buffer's memory" );
-		std::memcpy( mappedMemory, kRectangleIndices.data(), static_cast<std::size_t>(size) );
+		std::memcpy( mappedMemory, kCubeIndices.data(), static_cast<std::size_t>(size) );
 		// NOTE: if not using host coherent memory (which we are),
 		// call flushMappedMemoryRanges here and invalidateMappedMemoryRanges before reading it
 		spdlog::info( "... unmapping memory" );
@@ -1353,13 +1358,13 @@ namespace gfx {
 		spdlog::info( "... done!" );
 	} // end-of-function: Renderer::makeIndexBuffer
 	
-	
+   
 	
 	// TODO(later): contemplate moving out clean-up?
 	void
 	Renderer::makeUniformBuffers()
 	{
-		spdlog::info( "Creating uniform buffers..." );
+		spdlog::info( "Creating uniform buffer(s)..." );
 		
 		// pre-condition(s):
 		//   shouldn't be null unless the function is called in the wrong order:
@@ -1370,7 +1375,7 @@ namespace gfx {
 		mUniformBuffers.reserve( mImages.size() ); // one per swapchain frame
 		
 		for ( u64 i{0}; i<mImages.size(); ++i ) {
-		spdlog::info( "... creating uniform buffer {}", i );
+		spdlog::info( "... creating uniform buffer #{}", i );
 			mUniformBuffers.emplace_back(
 				makeBuffer(
 					vk::BufferUsageFlagBits::eUniformBuffer,
@@ -1383,6 +1388,93 @@ namespace gfx {
 	} // end-of-function: Renderer::makeUniformBuffers
 	
 	
+	
+	void
+	Renderer::makeDescriptorPool()
+	{
+		spdlog::info( "Creating descriptor pool..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpDevice != nullptr );
+	   
+		std::array const poolSizes {
+			// uniform buffer pool size:
+			vk::DescriptorPoolSize {
+			   .type            = vk::DescriptorType::eUniformBuffer,
+				.descriptorCount = static_cast<u32>( mImages.size() ), // one per swapchain frame
+			}
+			// NOTE(usage): add additional pools here
+		};
+		
+		try {
+			mpDescriptorPool = std::make_unique<vk::raii::DescriptorPool>(
+				*mpDevice,
+				vk::DescriptorPoolCreateInfo {
+					.flags         = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, // required for RAII
+					.maxSets       = static_cast<u32>( mImages.size() ), // TODO(explain)
+					.poolSizeCount = poolSizes.size(),
+					.pPoolSizes    = poolSizes.data(),
+				}
+			);
+		}
+		catch( vk::SystemError const &e ) {
+			spdlog::error( "Failed to create descriptor pool!" );
+			throw e;
+		}
+	} // end-of-function: Renderer::makeDescriptorPool
+	
+	
+	
+	void
+	Renderer::makeDescriptorSets()
+	{
+		spdlog::info( "Creating descriptor sets..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpDevice              != nullptr );
+		assert( mpDescriptorPool      != nullptr );
+		assert( mpDescriptorSetLayout != nullptr );
+		assert( mImages.empty()       != true    );
+		
+		try {
+			std::vector<vk::DescriptorSetLayout> const layouts( mImages.size(), **mpDescriptorSetLayout );
+			mpDescriptorSets = std::make_unique<vk::raii::DescriptorSets>(
+				*mpDevice,
+				vk::DescriptorSetAllocateInfo {
+					.descriptorPool     = **mpDescriptorPool,
+					.descriptorSetCount =   static_cast<u32>( mImages.size() ),
+					.pSetLayouts        =   layouts.data(), // TODO(verify)
+				}
+			);
+		}
+		catch( vk::SystemError const &e ) {
+			spdlog::error( "Failed to allocate descriptor sets!" );
+			throw e;
+		}
+	   
+		for ( auto i{0u}; i<mImages.size(); ++i ) {
+			vk::DescriptorBufferInfo const bufferInfo {
+				.buffer = *mUniformBuffers[i]->handle,
+				.offset =  0,
+				.range  =  sizeof(UniformBufferObject),
+			};
+			vk::WriteDescriptorSet const descriptorWrite {
+				.dstSet           = *(*mpDescriptorSets)[i], // TODO(verify)
+				.dstBinding       =  0, // NOTE: uniform index in shader
+				.dstArrayElement  =  0, // first index in array
+				.descriptorCount  =  1,
+				.descriptorType   =  vk::DescriptorType::eUniformBuffer,
+				.pImageInfo       =  nullptr, // optional; TODO(explain)
+				.pBufferInfo      = &bufferInfo,
+				.pTexelBufferView =  nullptr  // optional; TODO(explain)
+			};
+			mpDevice->updateDescriptorSets( descriptorWrite, {} );
+		}
+	} // end-of-function: Renderer::makeDescriptorSets
+	
+   
 	
 	void
 	Renderer::makeCommandBuffers()
@@ -1416,20 +1508,20 @@ namespace gfx {
 				vk::PipelineBindPoint::eGraphics,
 				**mpGraphicsPipeline
 			);
-			// TODO(later): commandBuffer.bindDescriptorSets(
-			// TODO(later): 	vk::PipelineBindPoint::eGraphics,
-			// TODO(later): 	*pipelineLayout,
-			// TODO(later): 	0,
-			// TODO(later): 	{ *descriptorSet },
-			// TODO(later): 	nullptr
-			// TODO(later): );
+			commandBuffer.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				**mpGraphicsPipelineLayout,
+				0,
+				{ *(*mpDescriptorSets)[index] },
+				nullptr
+			);
 			commandBuffer.bindVertexBuffers( 0, { *mpVertexBuffer->handle }, { 0 } );
 			commandBuffer.bindIndexBuffer( *mpIndexBuffer->handle, 0, vk::IndexType::eUint16 );
 			// NOTE(possibility): command_buffer.bindDescriptorSets()
 			// NOTE(possibility): command_buffer.setViewport()
 			// NOTE(possibility): command_buffer.setScissor()
 			commandBuffer.drawIndexed(
-				static_cast<u32>( kRectangleIndices.size() ), // index count
+				static_cast<u32>( kCubeIndices.size() ), // index count
 				1, // instance count
 				0, // first index
 				0, // vertex offset
@@ -1466,26 +1558,25 @@ namespace gfx {
 	void
 	Renderer::makeDynamicState()
 	{
+		spdlog::info( "Creating dynamic state..." );
+		
 		makeSwapchain();
 		makeDescriptorSetLayout();
 		makeGraphicsPipeline();
 		makeFramebuffers();
 		makeUniformBuffers();
+		makeDescriptorPool();
+		makeDescriptorSets();
 		makeCommandBuffers();
 	} // end-of-function: makeDynamicState
 	
 	
 	
 	void
-	Renderer::remakeDynamicState()
+	Renderer::wipeDynamicState()
 	{
-		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
-		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
-		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
-		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
-		// TODO(refactor)
-		spdlog::debug( "Generating dynamic state..." );
-		
+		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) 
+		spdlog::info( "Wiping dynamic state..." );
 		// delete previous state (if any) in the right order:
 		mImages.clear();
 		mImageViews.clear();
@@ -1499,11 +1590,21 @@ namespace gfx {
 			mpGraphicsPipeline.reset();
 		if ( mpSwapchain )
 			mpSwapchain.reset();
-		
-		assert( mFramebuffers.empty()         );
-		assert( mpCommandBuffers   == nullptr );
-		assert( mpGraphicsPipeline == nullptr );
-		assert( mpSwapchain        == nullptr );
+		if ( mpDescriptorSetLayout )
+			mpDescriptorSetLayout.reset();
+		if ( mpDescriptorSets )
+			mpDescriptorSets.reset();
+		if ( mpDescriptorPool )
+			mpDescriptorPool.reset();
+	} // end-of-function: Renderer::wipeDynamicState
+	
+	
+	
+	void
+	Renderer::remakeDynamicState()
+	{
+		spdlog::debug( "Recreating dynamic state..." );
+		wipeDynamicState();
 		
 		// handle minimization:
 		mpWindow->waitResize();
@@ -1520,6 +1621,7 @@ namespace gfx {
 	{
 		spdlog::info( "Constructing a Renderer instance..." );
 		// "fixed" part:
+		initializeData();
 		mpGlfwInstance = std::make_unique<GlfwInstance>();
 		makeVkContext();
 		makeVkInstance();
@@ -1569,41 +1671,75 @@ namespace gfx {
 	void
 	Renderer::initializeData()
 	{
-		/*TEMP*/ assert( glm::vec3(1.0f) == glm::vec3(1.0f, 1.0f, 1.0f) );
+		spdlog::info( "Initializing host data..." );
 		mData.startTime = high_resolution_clock::now();
-		mData.view      = glm::lookAt( glm::vec3(2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f) );
-		mData.clip      = glm::mat4(
+#if 0
+		mData.view      = glm::lookAt( glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f) );
+#else
+		mData.view  = glm::lookAt(
+		                 glm::vec3( -5,  3, -10 ),
+		                 glm::vec3(  0,  0,   0 ),
+		                 glm::vec3(  0, -1,   0 )
+		              );
+		mData.model = glm::mat4( 1 );
+		mData.clip  = glm::mat4(
 			1.0f,  0.0f,  0.0f,  0.0f,
 			0.0f, -1.0f,  0.0f,  0.0f,
 			0.0f,  0.0f,  0.5f,  0.0f,
 			0.0f,  0.0f,  0.5f,  1.0f
 		);
+#endif
 	} // Renderer::initializeData
 	
 	void
 	Renderer::updateUniformBuffer( u32 bufferIndex )
 	{
+		if constexpr ( kAllowPerFrameLogOutput )
+			spdlog::info( "Updating uniform buffer data..." );
 /*TEMP*/ auto const currentTime { high_resolution_clock::now() };
 /*TEMP*/ f32  const time        { duration<f32, seconds::period>( currentTime - mData.startTime ).count() };
 /*TEMP*/ f32  const aspectRatio { static_cast<f32>(mSurfaceExtent.width) / static_cast<f32>(mSurfaceExtent.height) };
+/*TEMP*/ mData.projection = glm::perspective( glm::radians(45.0f), aspectRatio, 0.1f, 100.0f );
+/*TEMP*/ //mData.projection[1][1] *= -1;
 /*TEMP*/ mData.model      = glm::rotate( glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f) );
-/*TEMP*/ mData.projection = glm::perspective( glm::radians(45.0f), aspectRatio, 0.1f, 10.0f );
-		
 		// update UBO data on host:
 		mUbo.mvp = mData.clip * mData.projection * mData.view * mData.model;
 		
+		if ( mCurrentFrame < 10 ) {
+			std::cout << fmt::format(
+				"4x4 MVP:\n"
+				".---------------------------------------.\n"
+				"| {:7.3f} | {:7.3f} | {:7.3f} | {:7.3f} |\n"
+				"+---------+---------+---------+---------+\n"
+				"| {:7.3f} | {:7.3f} | {:7.3f} | {:7.3f} |\n"
+				"+---------+---------+---------+---------+\n"
+				"| {:7.3f} | {:7.3f} | {:7.3f} | {:7.3f} |\n"
+				"+---------+---------+---------+---------+\n"
+				"| {:7.3f} | {:7.3f} | {:7.3f} | {:7.3f} |\n"
+				"'---------------------------------------'\n\n",
+				mUbo.mvp[0][0], mUbo.mvp[0][1], mUbo.mvp[0][2], mUbo.mvp[0][3], 
+				mUbo.mvp[1][0], mUbo.mvp[1][1], mUbo.mvp[1][2], mUbo.mvp[1][3], 
+				mUbo.mvp[2][0], mUbo.mvp[2][1], mUbo.mvp[2][2], mUbo.mvp[2][3], 
+				mUbo.mvp[3][0], mUbo.mvp[3][1], mUbo.mvp[3][2], mUbo.mvp[3][3]
+			);
+		}
+		
 		{ // TODO: verify block
-			spdlog::info( "... mapping the uniform data buffer's device memory to the host device's memory" );
+			if constexpr ( kAllowPerFrameLogOutput )
+				spdlog::info( "... mapping the uniform data buffer's device memory to the host device's memory" );
 			auto *pUboMappedMemory {
 				mUniformBuffers[bufferIndex]->memory.mapMemory( 0, sizeof(mUbo) )
 			};
-			spdlog::info( "... uploading UBO data to the mapped uniform data buffer memory" );
+			if constexpr ( kAllowPerFrameLogOutput )
+				spdlog::info( "... uploading UBO data to the mapped uniform data buffer memory" );
 			std::memcpy( pUboMappedMemory, &mUbo, sizeof(mUbo) );
-			spdlog::info( "... unmapping memory" );
+			if constexpr ( kAllowPerFrameLogOutput )
+				spdlog::info( "... unmapping memory" );
 			mUniformBuffers[bufferIndex]->memory.unmapMemory(); // TODO: remove when uniform buffer is dynamic? (look into push constants?)
 		}
 		
-		spdlog::info( "... done!" );	
+		if constexpr ( kAllowPerFrameLogOutput )
+			spdlog::info( "... done!" );
 	} // end-of-function: updateUniformBuffer
 	   
 	
@@ -1612,10 +1748,8 @@ namespace gfx {
 	Renderer::operator()()
 	{
 		auto const frame = mCurrentFrame % kMaxConcurrentFrames;
-#if 0 // TODO(reenable if needed)
-		if constexpr ( kIsDebugMode )
+		if constexpr ( kIsDebugMode and kAllowPerFrameLogOutput )
 			spdlog::info( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
-#endif
 		{
 			auto const waitResult {
 				mpDevice->waitForFences( *mFencesInFlight[frame], VK_TRUE, kDrawWaitTimeout )

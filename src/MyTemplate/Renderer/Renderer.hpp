@@ -56,6 +56,7 @@ namespace gfx {
 			void                                                    selectPresentMode() noexcept;
 			void                                                    selectFramebufferCount() noexcept;
 			void                                                    makeDynamicState();
+			void                                                    wipeDynamicState();
 			void                                                    remakeDynamicState();
 			void                                                    makeSwapchain();
 			[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule>   makeShaderModuleFromBinary( std::vector<char> const &shaderBinary ) const;
@@ -70,7 +71,9 @@ namespace gfx {
 			void                                                    makeVertexBuffer();
 			void                                                    makeIndexBuffer();
 			void                                                    makeUniformBuffers();
+			void                                                    makeDescriptorPool();
 			void                                                    makeFramebuffers();
+			void                                                    makeDescriptorSets();
 			void                                                    makeCommandBuffers();
 			void                                                    makeSyncPrimitives();
 			void                                                    updateUniformBuffer( u32 bufferIndex );
@@ -90,6 +93,8 @@ namespace gfx {
 			};
 			
 			// data members:          (NOTE: declaration/destruction order is very important here!)
+			// 
+			// fixed state:
 			HostData                                             mData                            ;
 			UniformBufferObject                                  mUbo                             ;
 			std::vector<char const *>                            mValidationLayers                ;
@@ -107,9 +112,10 @@ namespace gfx {
 			std::unique_ptr<vk::raii::Queue>                     mpGraphicsQueue                  ;
 			std::unique_ptr<vk::raii::Queue>                     mpPresentQueue                   ;
 			std::unique_ptr<vk::raii::Queue>                     mpTransferQueue                  ;
+			std::unique_ptr<vk::raii::DescriptorPool>            mpDescriptorPool                 ;
 			std::unique_ptr<vk::raii::CommandPool>               mpGraphicsCommandPool            ;
 			std::unique_ptr<vk::raii::CommandPool>               mpTransferCommandPool            ;
-			// dynamic:
+			// dynamic state:
 			vk::SurfaceFormatKHR                                 mSurfaceFormat                   ;
 			vk::SurfaceCapabilitiesKHR                           mSurfaceCapabilities             ;
 			vk::Extent2D                                         mSurfaceExtent                   ;
@@ -120,13 +126,14 @@ namespace gfx {
 			std::vector<vk::raii::ImageView>                     mImageViews                      ;
 			std::unique_ptr<Buffer>                              mpVertexBuffer                   ;
 			std::unique_ptr<Buffer>                              mpIndexBuffer                    ;
-			std::vector<std::unique_ptr<Buffer>>                 mUniformBuffers                  ; // on per swapchain frame
+			std::vector<std::unique_ptr<Buffer>>                 mUniformBuffers                  ; // on per swapchain frame (TODO: remove uptr?)
 			std::unique_ptr<vk::raii::CommandBuffers>            mpCommandBuffers                 ; // NOTE: Must be deleted before command pool!
 			std::unique_ptr<vk::raii::ShaderModule>              mpVertexShaderModule             ;
 			std::unique_ptr<vk::raii::ShaderModule>              mpFragmentShaderModule           ;
 			std::unique_ptr<vk::raii::PipelineLayout>            mpGraphicsPipelineLayout         ;
 			std::unique_ptr<vk::raii::RenderPass>                mpRenderPass                     ;
 			std::unique_ptr<vk::raii::DescriptorSetLayout>       mpDescriptorSetLayout            ;
+			std::unique_ptr<vk::raii::DescriptorSets>            mpDescriptorSets                 ;
 			std::unique_ptr<vk::raii::Pipeline>                  mpGraphicsPipeline               ;
 			std::vector<vk::raii::Framebuffer>                   mFramebuffers                    ; // NOTE: Must be deleted before swapchain!
 			bool                                                 mShouldRemakeSwapchain           ;

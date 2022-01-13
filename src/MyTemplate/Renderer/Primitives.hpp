@@ -63,7 +63,7 @@ namespace gfx {
 	
 	
 	struct Vertex3D {
-		glm::vec2 xyz; // 3D position
+		glm::vec3 xyz; // 3D position
 		glm::vec3 rgb; // colour
 		static const vk::VertexInputBindingDescription                 kVertexInputBindingDescription; 
 		static const std::array<vk::VertexInputAttributeDescription,2> kVertexInputAttributeDescriptions;
@@ -98,15 +98,24 @@ namespace gfx {
 	
 	
 	// Temp for test1 (TODO: remove)
-	inline static std::array<Vertex2D,4> constexpr kRectangleVertices {
-		Vertex2D { .xy = { -0.5f, -0.5f }, .rgb = { +1.0f,  0.0f,  0.0f } },
-		Vertex2D { .xy = { +0.5f, -0.5f }, .rgb = {  0.0f, +1.0f,  0.0f } },
-		Vertex2D { .xy = { +0.5f, +0.5f }, .rgb = {  0.0f,  0.0f, +1.0f } },
-		Vertex2D { .xy = { -0.5f, +0.5f }, .rgb = { +1.0f, +1.0f,  0.0f } }
+	static std::array constexpr kCubeVertices {
+		/*0*/ Vertex3D { .xyz = { -0.5f, -0.5f, -0.5f }, .rgb = { 1.0f, 0.0f, 1.0f } },
+		/*1*/ Vertex3D { .xyz = { +0.5f, -0.5f, -0.5f }, .rgb = { 1.0f, 0.0f, 1.0f } },
+		/*2*/ Vertex3D { .xyz = { +0.5f, +0.5f, -0.5f }, .rgb = { 1.0f, 1.0f, 1.0f } },
+		/*3*/ Vertex3D { .xyz = { -0.5f, +0.5f, -0.5f }, .rgb = { 1.0f, 1.0f, 1.0f } },
+		/*4*/ Vertex3D { .xyz = { -0.5f, -0.5f, +0.5f }, .rgb = { 1.0f, 0.0f, 1.0f } },
+		/*5*/ Vertex3D { .xyz = { +0.5f, -0.5f, +0.5f }, .rgb = { 1.0f, 0.0f, 1.0f } },
+		/*6*/ Vertex3D { .xyz = { +0.5f, +0.5f, +0.5f }, .rgb = { 1.0f, 1.0f, 1.0f } },
+		/*7*/ Vertex3D { .xyz = { -0.5f, +0.5f, +0.5f }, .rgb = { 1.0f, 1.0f, 1.0f } }
 	};
 	
-	inline static std::array<u16,6> constexpr kRectangleIndices {
-		0, 1, 2, 2, 3, 0
+	static std::array<u16,36> constexpr kCubeIndices {
+		0, 1, 2, 2, 3, 0, // Z-
+		6, 5, 4, 4, 7, 6, // Z+
+		5, 1, 0, 0, 4, 5, // Y-
+		3, 2, 6, 6, 7, 3, // Y+
+		0, 3, 7, 7, 4, 0, // X-
+		6, 2, 1, 1, 5, 6, // X+
 	};
 	
 } // end-of-namespace: gfx

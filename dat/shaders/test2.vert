@@ -2,7 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 
 // shader input:
-layout(location = 0) in  vec2 inXY;   // input vertex position TODO: vec3 inXYZ
+layout(location = 0) in  vec3 inXYZ;  // input vertex position
 layout(location = 1) in  vec3 inRGB;  // input vertex colour   TODO: textures later
 
 // shader output:
@@ -15,7 +15,7 @@ layout(binding = 0) uniform UniformBufferObject {
 
 // shader program:
 void main() {
-	gl_Position = mvp * vec4( inXY, .0, 1.0 );
+	gl_Position = mvp * vec4( inXYZ, 1.0 );
 	outRGB      = inRGB;
 }
 
