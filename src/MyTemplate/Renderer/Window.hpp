@@ -34,8 +34,8 @@ namespace gfx {
 		private:
 			static void onResizeCallback( GLFWwindow *, [[maybe_unused]] int width, [[maybe_unused]] int height );
 			
-			GLFWwindow                            *mpWindow;
 			std::unique_ptr<vk::raii::SurfaceKHR>  mpSurface;
+			GLFWwindow                            *mpWindow;
 			bool                                  *mpSetOnResize;
 	}; // end-of-class: Window
 } // end-of-namespace: gfx

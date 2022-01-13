@@ -35,13 +35,25 @@ target_compile_definitions ( ${PROJECT_NAME} PUBLIC VULKAN_HPP_NO_CONSTRUCTORS )
 target_compile_definitions ( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_NONE          )
 target_compile_definitions ( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_VULKAN        )
 
-target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20                                        ) # Set C++ standard to C++20
+target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20 ) # Set C++ standard to C++20
 # TODO: target_compile_options     ( ${PROJECT_NAME} PUBLIC "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->" ) # To help ensure cross-platform compatibility
-target_include_directories ( ${PROJECT_NAME} PUBLIC "src/"                                            ) # Source code
-set_target_properties      ( ${PROJECT_NAME} PROPERTIES CXX_EXTENSIONS OFF                            ) # For cross-platform compatibility
-
+target_include_directories ( ${PROJECT_NAME} PUBLIC "src/" ) # Source code
+set_target_properties      ( ${PROJECT_NAME} PROPERTIES CXX_EXTENSIONS OFF ) # For cross-platform compatibility
+target_compile_options     ( ${PROJECT_NAME} PRIVATE
+	-pthread
+	-fopenmp
+	-Wall
+	-Wconversion
+	-Wsign-conversion
+	-Wformat=2
+	-Wextra
+	-pedantic
+	-pedantic-errors
+)
+#--
 #------------------------ External Dependencies: -------------------------#
 set( CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH} )
+find_package ( Threads )
 include ( cmake/CPM.cmake )
 CPMAddPackage( "gh:fmtlib/fmt#d141cdbeb0fb422a3fb7173b285fd38e0d1772dc"                  ) # {fmt}   v8.0.1
 CPMAddPackage( "gh:onqtam/doctest#4d8716f1efc1d14aa736ef52ee727bd4204f4c40"              ) # DocTest v2.4.6
@@ -53,7 +65,8 @@ CPMAddPackage( "gh:falkgaard/fHash@0.1"                                         
 CPMAddPackage( "gh:falkgaard/fRNG@0.1"                                                   ) # fHash   v0.1.0
 # ImGui is directly in src/
 target_link_libraries( ${PROJECT_NAME} PRIVATE
-	doctest::doctest
+	${CMAKE_THREAD_LIBS_INIT}
+  	doctest::doctest
 	spdlog::spdlog
 	fmt::fmt
 	glfw

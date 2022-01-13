@@ -95,12 +95,10 @@ namespace gfx {
 			};
 			if ( binaryFile ) {
 				spdlog::info( "... successful!" );
-				auto const binarySize {
-					static_cast<std::size_t>( binaryFile.tellg() )
-				};
+				auto const binarySize { binaryFile.tellg() };
 				spdlog::info( "... binary size: {}", binarySize );
 				binaryFile.seekg( 0 );
-				std::vector<char> binaryBuffer( binarySize );
+				std::vector<char> binaryBuffer( static_cast<std::size_t>(binarySize) );
 				binaryFile.read( binaryBuffer.data(), binarySize );
 				return binaryBuffer;
 			}
@@ -1178,11 +1176,6 @@ namespace gfx {
 		
 		auto const requirements { bufferHandle.getMemoryRequirements() };
 		
-		vk::MemoryAllocateInfo const allocateInfo {
-			.allocationSize  = requirements.size,
-			.memoryTypeIndex = findMemoryTypeIndex( requirements.memoryTypeBits, properties )
-		};
-		                 
 		spdlog::info( "... allocating buffer device memory" );
 		auto bufferMemory {
 			vk::raii::DeviceMemory(
@@ -1386,7 +1379,7 @@ namespace gfx {
 		mImagePresentable .reserve( kMaxConcurrentFrames );
 		mImageAvailable   .reserve( kMaxConcurrentFrames );
 		mFencesInFlight   .reserve( kMaxConcurrentFrames );
-		for ( auto i{0}; i < kMaxConcurrentFrames; ++i ) {
+		for ( auto i{0u}; i < kMaxConcurrentFrames; ++i ) {
 			mImagePresentable .emplace_back( mpDevice->createSemaphore({}) );
 			mImageAvailable   .emplace_back( mpDevice->createSemaphore({}) );
 			mFencesInFlight   .emplace_back( mpDevice->createFence({.flags = vk::FenceCreateFlagBits::eSignaled}) );
