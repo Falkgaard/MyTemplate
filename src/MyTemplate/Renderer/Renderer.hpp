@@ -10,6 +10,17 @@
 #include <memory>
 #include <vector>
 
+// #include <glm/common.hpp>
+// #include <glm/exponential.hpp>
+// #include <glm/geometric.hpp>
+#include <glm/matrix.hpp>
+// #include <glm/trigonometric.hpp>
+// #include <glm/ext/vector_float3.hpp>
+// #include <glm/ext/matrix_float4x4.hpp>
+// #include <glm/ext/matrix_transform.hpp>
+// #include <glm/ext/matrix_clip_space.hpp>
+// #include <glm/ext/scalar_constants.hpp>
+
 namespace gfx {
 	class Renderer final {
 		public:
@@ -25,6 +36,7 @@ namespace gfx {
 			void operator()(); // renders
 			
 		private:
+			// functions:
 			void                                                    enableValidationLayers();
 			void                                                    enableInstanceExtensions();
 			[[nodiscard]] bool                                      meetsDeviceExtensionRequirements( vk::raii::PhysicalDevice const & ) const;
@@ -59,7 +71,21 @@ namespace gfx {
 			void                                                    makeCommandBuffers();
 			void                                                    makeSyncPrimitives();
 			
-			// NOTE: declaration order is very important here! (it dictates the order of destruction)
+			// structs:
+			struct HostData { // CPU-only
+				glm::mat4 model; // NOTE: will be replaced with model-local data
+				glm::mat4 view;
+				glm::mat4 projection;
+				glm::mat4 clip;
+			};
+			
+			struct UniformBufferObject {
+				glm::mat4 mvp;
+			};
+			
+			// data members:          (NOTE: declaration/destruction order is very important here!)
+			HostData                                             mData                            ;
+			UniformBufferObject                                  mUbo                             ;
 			std::vector<char const *>                            mValidationLayers                ;
 			std::vector<char const *>                            mInstanceExtensions              ;
 			std::unique_ptr<GlfwInstance>                        mpGlfwInstance                   ;
