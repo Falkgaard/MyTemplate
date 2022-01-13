@@ -1290,7 +1290,7 @@ namespace gfx {
 		
 
 		spdlog::info( "... creating staging buffer" );
-		vk::DeviceSize const size { kCubeVertices.size() * sizeof(Vertex3D) };
+		vk::DeviceSize const size { kCube.vertices.size() * sizeof(decltype(kCube)::VertexType) };
 		auto stagingBuffer = makeBuffer(
 			vk::BufferUsageFlagBits::eTransferSrc,
 			size,
@@ -1301,7 +1301,7 @@ namespace gfx {
 		auto *mappedMemory { stagingBuffer->memory.mapMemory( 0, size ) };
 		
 		spdlog::info( "... copying vertex data to staging buffer's memory" );
-		std::memcpy( mappedMemory, kCubeVertices.data(), static_cast<std::size_t>(size) );
+		std::memcpy( mappedMemory, kCube.vertices.data(), static_cast<std::size_t>(size) );
 		// NOTE: if not using host coherent memory (which we are),
 		// call flushMappedMemoryRanges here and invalidateMappedMemoryRanges before reading it
 		spdlog::info( "... unmapping memory" );
@@ -1330,7 +1330,7 @@ namespace gfx {
 		assert( mpDevice != nullptr );
 		
 		spdlog::info( "... creating staging buffer" );
-		vk::DeviceSize const size { kCubeIndices.size() * sizeof(u16) };
+		vk::DeviceSize const size { kCube.indices.size() * sizeof(decltype(kCube)::IndexType) };
 		auto stagingBuffer = makeBuffer(
 			vk::BufferUsageFlagBits::eTransferSrc,
 			size,
@@ -1341,7 +1341,7 @@ namespace gfx {
 		auto *mappedMemory { stagingBuffer->memory.mapMemory( 0, size ) };
 		   
 		spdlog::info( "... copying index data to staging buffer's memory" );
-		std::memcpy( mappedMemory, kCubeIndices.data(), static_cast<std::size_t>(size) );
+		std::memcpy( mappedMemory, kCube.indices.data(), static_cast<std::size_t>(size) );
 		// NOTE: if not using host coherent memory (which we are),
 		// call flushMappedMemoryRanges here and invalidateMappedMemoryRanges before reading it
 		spdlog::info( "... unmapping memory" );
@@ -1521,7 +1521,7 @@ namespace gfx {
 			// NOTE(possibility): command_buffer.setViewport()
 			// NOTE(possibility): command_buffer.setScissor()
 			commandBuffer.drawIndexed(
-				static_cast<u32>( kCubeIndices.size() ), // index count
+				static_cast<u32>( kCube.indices.size() ), // index count
 				1, // instance count
 				0, // first index
 				0, // vertex offset
@@ -1673,7 +1673,7 @@ namespace gfx {
 	{
 		spdlog::info( "Initializing host data..." );
 		mData.startTime = high_resolution_clock::now();
-#if 0
+#if 1
 		mData.view      = glm::lookAt( glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f) );
 #else
 		mData.view  = glm::lookAt(
@@ -1681,6 +1681,7 @@ namespace gfx {
 		                 glm::vec3(  0,  0,   0 ),
 		                 glm::vec3(  0, -1,   0 )
 		              );
+#endif
 		mData.model = glm::mat4( 1 );
 		mData.clip  = glm::mat4(
 			1.0f,  0.0f,  0.0f,  0.0f,
@@ -1688,7 +1689,6 @@ namespace gfx {
 			0.0f,  0.0f,  0.5f,  0.0f,
 			0.0f,  0.0f,  0.5f,  1.0f
 		);
-#endif
 	} // Renderer::initializeData
 	
 	void
@@ -1705,7 +1705,7 @@ namespace gfx {
 		// update UBO data on host:
 		mUbo.mvp = mData.clip * mData.projection * mData.view * mData.model;
 		
-		if ( mCurrentFrame < 10 ) {
+		if ( mCurrentFrame < 3 ) {
 			std::cout << fmt::format(
 				"4x4 MVP:\n"
 				".---------------------------------------.\n"
