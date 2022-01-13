@@ -7,15 +7,29 @@
 
 #include <spdlog/spdlog.h>
 
+#include <glm/common.hpp>
+#include <glm/exponential.hpp>
+#include <glm/geometric.hpp>
+#include <glm/matrix.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/trigonometric.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/scalar_constants.hpp>
+
 #include <ranges>
 #include <algorithm>
 #include <optional>
+#include <chrono>
 #include <array>
 #include <vector>
 #include <set>
 #include <fstream>
 #include <memory>
 #include <cassert>
+
+using namespace std::chrono;
 
 // TODO(later): Switch over to a custom allocator (e.g. for buffers) later, such as VulkanMemoryAllocator
 // TODO(later): Use a single buffer for shared attributes (verts, indices, etc)
@@ -811,7 +825,7 @@ namespace gfx {
 			mQueueFamilyIndices.presentIndex,
 			mQueueFamilyIndices.graphicsIndex
 		};
-		// TODO: check present support	
+		
 		mpSwapchain = std::make_unique<vk::raii::SwapchainKHR>(
 			*mpDevice,
 			vk::SwapchainCreateInfoKHR {
@@ -819,7 +833,7 @@ namespace gfx {
 				.minImageCount         =  mFramebufferCount,
 				.imageFormat           =  mSurfaceFormat.format,
 				.imageColorSpace       =  mSurfaceFormat.colorSpace,
-				.imageExtent           =  mSurfaceExtent,
+				.imageExtent           =  mSurfaceExtent, // TODO: wot? find a way to silence the warning
 				.imageArrayLayers      =  1, // non-stereoscopic
 				.imageUsage            =  vk::ImageUsageFlagBits::eColorAttachment, // TODO(later): eTransferDst for post-processing
 				.imageSharingMode      =  mQueueFamilyIndices.areSeparate ? vk::SharingMode::eConcurrent : vk::SharingMode::eExclusive,
@@ -1214,16 +1228,14 @@ namespace gfx {
 		spdlog::info( "... allocating buffer device memory" );
 		auto bufferMemory {
 			vk::raii::DeviceMemory(
-				std::move(
-					mpDevice->allocateMemory(
-						{
-							.allocationSize  = requirements.size,
-							.memoryTypeIndex = findMemoryTypeIndex(
-							                      requirements.memoryTypeBits,
-							                      properties
-							                 )
-						}
-					)
+				mpDevice->allocateMemory(
+					{
+						.allocationSize  = requirements.size,
+						.memoryTypeIndex = findMemoryTypeIndex(
+						                      requirements.memoryTypeBits,
+						                      properties
+						                 )
+					}
 				)
 			)
 		};
@@ -1232,7 +1244,7 @@ namespace gfx {
 		spdlog::info( "... binding buffer device memory to buffer handle" );
 		bufferHandle.bindMemory( *bufferMemory, 0 );
    
-		return std::make_unique<Buffer>( std::move(bufferHandle), std::move(bufferMemory) );
+		return std::make_unique<Buffer>( Buffer{ std::move(bufferHandle), std::move(bufferMemory) } );
 	} // end-of-function: Renderer::makeBuffer
 	
 	
@@ -1256,7 +1268,7 @@ namespace gfx {
 			.commandBufferCount =  1,
 			.pCommandBuffers    = &*commandBuffer[0]
 		};
-		mpTransferQueue->submit({ submitInfo });
+		mpTransferQueue->submit( submitInfo );
 		mpTransferQueue->waitIdle(); // TODO(later): use fence instead if allowing concurrent transfers
 	} // end-of-function: Renderer::copy
 	
@@ -1312,7 +1324,6 @@ namespace gfx {
 		//   shouldn't be null unless the function is called in the wrong order:
 		assert( mpDevice != nullptr );
 		
-
 		spdlog::info( "... creating staging buffer" );
 		vk::DeviceSize const size { kRectangleIndices.size() * sizeof(u16) };
 		auto stagingBuffer = makeBuffer(
@@ -1323,7 +1334,7 @@ namespace gfx {
 		
 		spdlog::info( "... mapping staging buffer memory to CPU memory" );
 		auto *mappedMemory { stagingBuffer->memory.mapMemory( 0, size ) };
-	   
+		   
 		spdlog::info( "... copying index data to staging buffer's memory" );
 		std::memcpy( mappedMemory, kRectangleIndices.data(), static_cast<std::size_t>(size) );
 		// NOTE: if not using host coherent memory (which we are),
@@ -1341,6 +1352,35 @@ namespace gfx {
 		copy( *stagingBuffer, *mpIndexBuffer, size );
 		spdlog::info( "... done!" );
 	} // end-of-function: Renderer::makeIndexBuffer
+	
+	
+	
+	// TODO(later): contemplate moving out clean-up?
+	void
+	Renderer::makeUniformBuffers()
+	{
+		spdlog::info( "Creating uniform buffers..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpSwapchain != nullptr );
+		
+		vk::DeviceSize const size { sizeof(UniformBufferObject) };
+		mUniformBuffers.clear();                   // clear in case they're being recreated
+		mUniformBuffers.reserve( mImages.size() ); // one per swapchain frame
+		
+		for ( u64 i{0}; i<mImages.size(); ++i ) {
+		spdlog::info( "... creating uniform buffer {}", i );
+			mUniformBuffers.emplace_back(
+				makeBuffer(
+					vk::BufferUsageFlagBits::eUniformBuffer,
+					size,
+					vk::MemoryPropertyFlagBits::eDeviceLocal | vk::MemoryPropertyFlagBits::eHostCoherent
+				)
+			);
+		}
+		spdlog::info( "... done!" );
+	} // end-of-function: Renderer::makeUniformBuffers
 	
 	
 	
@@ -1430,6 +1470,7 @@ namespace gfx {
 		makeDescriptorSetLayout();
 		makeGraphicsPipeline();
 		makeFramebuffers();
+		makeUniformBuffers();
 		makeCommandBuffers();
 	} // end-of-function: makeDynamicState
 	
@@ -1449,6 +1490,7 @@ namespace gfx {
 		mImages.clear();
 		mImageViews.clear();
 		mFramebuffers.clear();
+		mUniformBuffers.clear();
 		if ( mpCommandBuffers ) {
 			mpCommandBuffers->clear();
 			mpCommandBuffers.reset();
@@ -1524,14 +1566,56 @@ namespace gfx {
 		return *mpWindow;
 	} // end-of-function: Renderer::getWindow
 	
+	void
+	Renderer::initializeData()
+	{
+		/*TEMP*/ assert( glm::vec3(1.0f) == glm::vec3(1.0f, 1.0f, 1.0f) );
+		mData.startTime = high_resolution_clock::now();
+		mData.view      = glm::lookAt( glm::vec3(2.0f), glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f) );
+		mData.clip      = glm::mat4(
+			1.0f,  0.0f,  0.0f,  0.0f,
+			0.0f, -1.0f,  0.0f,  0.0f,
+			0.0f,  0.0f,  0.5f,  0.0f,
+			0.0f,  0.0f,  0.5f,  1.0f
+		);
+	} // Renderer::initializeData
 	
-   
+	void
+	Renderer::updateUniformBuffer( u32 bufferIndex )
+	{
+/*TEMP*/ auto const currentTime { high_resolution_clock::now() };
+/*TEMP*/ f32  const time        { duration<f32, seconds::period>( currentTime - mData.startTime ).count() };
+/*TEMP*/ f32  const aspectRatio { static_cast<f32>(mSurfaceExtent.width) / static_cast<f32>(mSurfaceExtent.height) };
+/*TEMP*/ mData.model      = glm::rotate( glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f) );
+/*TEMP*/ mData.projection = glm::perspective( glm::radians(45.0f), aspectRatio, 0.1f, 10.0f );
+		
+		// update UBO data on host:
+		mUbo.mvp = mData.clip * mData.projection * mData.view * mData.model;
+		
+		{ // TODO: verify block
+			spdlog::info( "... mapping the uniform data buffer's device memory to the host device's memory" );
+			auto *pUboMappedMemory {
+				mUniformBuffers[bufferIndex]->memory.mapMemory( 0, sizeof(mUbo) )
+			};
+			spdlog::info( "... uploading UBO data to the mapped uniform data buffer memory" );
+			std::memcpy( pUboMappedMemory, &mUbo, sizeof(mUbo) );
+			spdlog::info( "... unmapping memory" );
+			mUniformBuffers[bufferIndex]->memory.unmapMemory(); // TODO: remove when uniform buffer is dynamic? (look into push constants?)
+		}
+		
+		spdlog::info( "... done!" );	
+	} // end-of-function: updateUniformBuffer
+	   
+	
+	
 	void
 	Renderer::operator()()
 	{
 		auto const frame = mCurrentFrame % kMaxConcurrentFrames;
-		if constexpr ( kIsDebugMode ) spdlog::info( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
-		
+#if 0 // TODO(reenable if needed)
+		if constexpr ( kIsDebugMode )
+			spdlog::info( "[draw]: Drawing frame #{} (@{})...", mCurrentFrame, frame );
+#endif
 		{
 			auto const waitResult {
 				mpDevice->waitForFences( *mFencesInFlight[frame], VK_TRUE, kDrawWaitTimeout )
@@ -1555,7 +1639,9 @@ namespace gfx {
 		catch ( vk::SystemError const &e ) {
 			spdlog::error( "Encountered system error: \"{}\"!", e.what() );
 			throw std::runtime_error { "Failed to acquire swapchain image!" };
-		}	
+		}
+		
+		updateUniformBuffer( acquiredIndex );
 		
 		try {
 			mpDevice->resetFences( *mFencesInFlight[frame] );

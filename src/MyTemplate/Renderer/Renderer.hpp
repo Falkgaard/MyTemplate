@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <vector>
+#include <chrono>
 
 // #include <glm/common.hpp>
 // #include <glm/exponential.hpp>
@@ -17,7 +18,6 @@
 // #include <glm/trigonometric.hpp>
 // #include <glm/ext/vector_float3.hpp>
 // #include <glm/ext/matrix_float4x4.hpp>
-// #include <glm/ext/matrix_transform.hpp>
 // #include <glm/ext/matrix_clip_space.hpp>
 // #include <glm/ext/scalar_constants.hpp>
 
@@ -69,16 +69,20 @@ namespace gfx {
 			void                                                    copy( Buffer const &src, Buffer &dst, vk::DeviceSize const );
 			void                                                    makeVertexBuffer();
 			void                                                    makeIndexBuffer();
+			void                                                    makeUniformBuffers();
 			void                                                    makeFramebuffers();
 			void                                                    makeCommandBuffers();
 			void                                                    makeSyncPrimitives();
+			void                                                    updateUniformBuffer( u32 bufferIndex );
+			void                                                    initializeData();
 			
 			// structs:
 			struct HostData { // CPU-only
-				glm::mat4 model; // NOTE: will be replaced with model-local data
-				glm::mat4 view;
-				glm::mat4 projection;
-				glm::mat4 clip;
+				std::chrono::system_clock::time_point  startTime;
+				glm::mat4                              model; // NOTE: will be replaced with model-local data
+				glm::mat4                              view;
+				glm::mat4                              projection;
+				glm::mat4                              clip;
 			};
 			
 			struct UniformBufferObject {
@@ -116,6 +120,7 @@ namespace gfx {
 			std::vector<vk::raii::ImageView>                     mImageViews                      ;
 			std::unique_ptr<Buffer>                              mpVertexBuffer                   ;
 			std::unique_ptr<Buffer>                              mpIndexBuffer                    ;
+			std::vector<std::unique_ptr<Buffer>>                 mUniformBuffers                  ; // on per swapchain frame
 			std::unique_ptr<vk::raii::CommandBuffers>            mpCommandBuffers                 ; // NOTE: Must be deleted before command pool!
 			std::unique_ptr<vk::raii::ShaderModule>              mpVertexShaderModule             ;
 			std::unique_ptr<vk::raii::ShaderModule>              mpFragmentShaderModule           ;
