@@ -960,6 +960,41 @@ namespace gfx {
 	
 	
 	
+	void // TODO(refactor): Use this function as a template (w.r.t. arrays & try-catch)
+	Renderer::makeDescriptorSetLayout()
+	{
+		spdlog::info( "Creating descriptor set layout..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpDevice != nullptr );
+		
+		std::array const bindings {
+			// uniform buffer object binding:
+			vk::DescriptorSetLayoutBinding { 
+				.binding            = 0, // in-shader access index
+				.descriptorType     = vk::DescriptorType::eUniformBuffer,
+				.descriptorCount    = 1, // NOTE: >1 for arrays (e.g. skeleton bones)
+				.stageFlags         = vk::ShaderStageFlagBits::eVertex, // our MVP UBO is only needed there
+				.pImmutableSamplers = nullptr, // optional; TODO(revisit)
+			}
+			// NOTE(usage): add future bindings inside of this array
+			// TODO(imgui): create binding here as well and the rename function to plural
+		};
+		try {
+			mpDescriptorSetLayout = std::make_unique<vk::raii::DescriptorSetLayout>(
+				*mpDevice,
+				vk::DescriptorSetLayoutCreateInfo {
+					.bindingCount = bindings.size(),
+					.pBindings    = bindings.data()
+				}
+			);
+		}
+		catch( vk::SystemError const &e ) {
+			spdlog::error( "Failed to create descriptor set layout! (`{}`)", e.what() );
+		}
+	} // end-of-function: Renderer::makeDescriptorSetLayout
+	
 	void
 	Renderer::makeGraphicsPipeline()
 	{
@@ -969,7 +1004,7 @@ namespace gfx {
 		
 		// pre-condition(s):
 		//   shouldn't be null or ??? unless the function is called in the wrong order:
-		assert( mpDevice       != nullptr );
+		assert( mpDevice != nullptr );
 		
 		spdlog::info( "Creating shader modules..." );
 		auto const vertexModule   = makeShaderModuleFromFile( "../dat/shaders/test1.vert.spv" );
@@ -1389,7 +1424,19 @@ namespace gfx {
 	
 	
 	void
-	Renderer::generateDynamicState()
+	Renderer::makeDynamicState()
+	{
+		makeSwapchain();
+		makeDescriptorSetLayout();
+		makeGraphicsPipeline();
+		makeFramebuffers();
+		makeCommandBuffers();
+	} // end-of-function: makeDynamicState
+	
+	
+	
+	void
+	Renderer::remakeDynamicState()
 	{
 		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
 		// TODO(cleanup): Might need to clean up mpCommandBuffers, mDescriptors, whatever here (IMPORTANT!!!) TODO TODO TODO TODO TODO
@@ -1420,11 +1467,8 @@ namespace gfx {
 		mpWindow->waitResize();
 		mpDevice->waitIdle();	
 		
-		makeSwapchain();
-		makeGraphicsPipeline();
-		makeFramebuffers();
-		makeCommandBuffers();
-	} // end-of-function: Renderer::generateDynamicState
+		makeDynamicState();
+	} // end-of-function: Renderer::remakeDynamicState
 	
 	
 	
@@ -1444,14 +1488,11 @@ namespace gfx {
 		makeLogicalDevice();
 		makeQueues();
 		makeCommandPools();
-		// "dynamic" part:
-		makeSwapchain();
-		makeGraphicsPipeline();
-		makeFramebuffers();
 		makeVertexBuffer();
 		makeIndexBuffer();
-		makeCommandBuffers();
 		makeSyncPrimitives(); // TODO(config): refactor so it is updated whenever framebuffer count changes
+		// "dynamic" part:
+		makeDynamicState();
 	//instance
 	} // end-of-function: Renderer::Renderer
 	
@@ -1508,7 +1549,7 @@ namespace gfx {
 		}
 		catch ( vk::OutOfDateKHRError const & ) {
 			spdlog::info( "Swapchain out-of-date!" );
-			generateDynamicState(); // likely having to handle a screen resize...
+			remakeDynamicState(); // likely having to handle a screen resize...
 			return;
 		}
 		catch ( vk::SystemError const &e ) {
@@ -1563,7 +1604,7 @@ namespace gfx {
 		{
 			spdlog::info( "Swapchain out-of-date or window resized!" );
 			mShouldRemakeSwapchain = false;
-			generateDynamicState();
+			remakeDynamicState();
 			return; // TODO: verify that this is needed
 		}
 		

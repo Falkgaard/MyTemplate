@@ -55,10 +55,12 @@ namespace gfx {
 			void                                                    selectSurfaceExtent();
 			void                                                    selectPresentMode() noexcept;
 			void                                                    selectFramebufferCount() noexcept;
-			void                                                    generateDynamicState();
+			void                                                    makeDynamicState();
+			void                                                    remakeDynamicState();
 			void                                                    makeSwapchain();
 			[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule>   makeShaderModuleFromBinary( std::vector<char> const &shaderBinary ) const;
 			[[nodiscard]] std::unique_ptr<vk::raii::ShaderModule>   makeShaderModuleFromFile( std::string const &shaderSpirvBytecodeFilename ) const;
+			void                                                    makeDescriptorSetLayout();
 			void                                                    makeGraphicsPipelineLayout();
 			void                                                    makeRenderPass(); // TODO: rename?
 			void                                                    makeGraphicsPipeline();
@@ -119,6 +121,7 @@ namespace gfx {
 			std::unique_ptr<vk::raii::ShaderModule>              mpFragmentShaderModule           ;
 			std::unique_ptr<vk::raii::PipelineLayout>            mpGraphicsPipelineLayout         ;
 			std::unique_ptr<vk::raii::RenderPass>                mpRenderPass                     ;
+			std::unique_ptr<vk::raii::DescriptorSetLayout>       mpDescriptorSetLayout            ;
 			std::unique_ptr<vk::raii::Pipeline>                  mpGraphicsPipeline               ;
 			std::vector<vk::raii::Framebuffer>                   mFramebuffers                    ; // NOTE: Must be deleted before swapchain!
 			bool                                                 mShouldRemakeSwapchain           ;
