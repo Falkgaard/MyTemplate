@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 printf '\033[0;1;37mBuilding release build...\033[0m\n'
-cmake -S . -Brelease -DCMAKE_BUILD_TYPE=Release && rm -f ./compile_commands.json && ln -s ./release/compile_commands.json ./ && cd ./release/ && make && cd .. && ./dat/shaders/compile.sh
+cmake -S . -Brelease -DCMAKE_BUILD_TYPE=Release && rm -f ./compile_commands.json && ln -s ./release/compile_commands.json ./ && cd ./release/ && make -j4 && cd .. && ./dat/shaders/compile.sh
 if [ "$?" -ne "0" ]; then
 	printf '\033[0;1;37m... error!\033[0m\n'
 	exit 1
