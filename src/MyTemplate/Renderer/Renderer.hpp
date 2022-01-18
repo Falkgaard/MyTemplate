@@ -103,13 +103,13 @@ namespace gfx {
 			std::unique_ptr<GlfwInstance>                        mpGlfwInstance                   ;
 			std::unique_ptr<vk::raii::Context>                   mpVkContext                      ;
 			std::unique_ptr<vk::raii::Instance>                  mpVkInstance                     ;
-			#if !defined( NDEBUG )
+			#if !defined( NDEBUG ) // TODO: use app-specific define!
 				std::unique_ptr<vk::raii::DebugUtilsMessengerEXT> mpDebugMessenger                 ;
 			#endif
 			std::unique_ptr<Window>                              mpWindow                         ;
 			std::unique_ptr<vk::raii::PhysicalDevice>            mpPhysicalDevice                 ;
 			QueueFamilyIndices                                   mQueueFamilyIndices              ;
-			std::unique_ptr<vk::raii::Device>                    mpDevice                         ;
+			std::unique_ptr<vk::raii::Device>                    mpDevice                         ; // TODO: rename?
 			std::unique_ptr<vk::raii::Queue>                     mpGraphicsQueue                  ;
 			std::unique_ptr<vk::raii::Queue>                     mpPresentQueue                   ;
 			std::unique_ptr<vk::raii::Queue>                     mpTransferQueue                  ;
@@ -123,8 +123,9 @@ namespace gfx {
 			vk::PresentModeKHR                                   mPresentMode                     ;
 			u32                                                  mFramebufferCount                ;
 			std::unique_ptr<vk::raii::SwapchainKHR>              mpSwapchain                      ;
-			std::vector<VkImage>                                 mImages                          ;
-			std::vector<vk::raii::ImageView>                     mImageViews                      ;
+			std::vector<VkImage>                                 mImages                          ; // TODO: rename/refactor?
+			std::vector<vk::raii::ImageView>                     mImageViews                      ; // TODO: rename/refactor?
+			std::unique_ptr<vk::raii::Image>                     mpTextureImage                   ;
 			std::unique_ptr<Buffer>                              mpVertexBuffer                   ;
 			std::unique_ptr<Buffer>                              mpIndexBuffer                    ;
 			std::vector<std::unique_ptr<Buffer>>                 mUniformBuffers                  ; // on per swapchain frame (TODO: remove uptr?)

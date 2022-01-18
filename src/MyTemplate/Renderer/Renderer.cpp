@@ -1287,7 +1287,56 @@ namespace gfx {
 	void
 	Renderer::makeTextureImage()
 	{
-
+		// TODO: pre-conds, logging, try-catch
+		
+		i32 imageWidth;
+		i32 imageHeight;
+		[[maybe_unused]] i32 imageChannels;
+		
+		auto *pImageData {
+			stbi_load(
+				"../dat/textures/texture.jpeg",
+				&imageWidth,
+				&imageHeight,
+				&imageChannels,
+				STBI_rgb_alpha
+			)
+		};
+		if ( pImageData != nullptr ) {
+			vk::DeviceSize const imageSize { 4 * static_cast<u32>(imageWidth * imageHeight) };
+			
+			// NOTE: copying from a vk::Buffer instead of using a staging image can be faster on some hardware!
+			auto stagingBuffer {
+				makeBuffer(
+					vk::BufferUsageFlagBits::eTransferSrc,
+					imageSize,
+					vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+				)
+			};
+			
+			auto *pMappedMemory { stagingBuffer->memory.mapMemory( 0, imageSize ) };
+			std::memcpy( pMappedMemory, pImageData, static_cast<std::size_t>(imageSize) );
+			stagingBuffer->memory.unmapMemory();
+			
+			mpTextureImage = std::make_unique<vk::raii::Image>(
+				*mpDevice,
+				vk::ImageCreateInfo {
+					.imageType   = vk::ImageType::e2D,
+					.format      = vk::Format::eR8G8B8A8Srgb,
+					.extent      = vk::Extent3D {
+					                  .width  = static_cast<u32>(imageWidth),
+					                  .height = static_cast<u32>(imageHeight),
+					                  .depth  = 1
+					},
+					.mipLevels   = 1,
+					.arrayLayers = 1,
+					.tiling      = vk::ImageTiling::eOptimal,
+				}
+			);
+			
+			stbi_image_free( pImageData );
+		}
+		else throw std::runtime_error { "STB failed to load image!" };
 	}
 	
 	
