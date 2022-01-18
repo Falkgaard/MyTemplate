@@ -68,6 +68,7 @@ namespace gfx {
 			[[nodiscard]] u32                                       findMemoryTypeIndex( u32 const typeFilter, vk::MemoryPropertyFlags const ) const;
 			[[nodiscard]] std::unique_ptr<Buffer>                   makeBuffer( vk::BufferUsageFlags const, vk::DeviceSize const, vk::MemoryPropertyFlags const );
 			void                                                    copy( Buffer const &src, Buffer &dst, vk::DeviceSize const );
+			void                                                    makeImage();
 			void                                                    makeTextureImage();
 			void                                                    makeVertexBuffer();
 			void                                                    makeIndexBuffer();

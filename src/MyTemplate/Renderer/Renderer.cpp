@@ -1287,12 +1287,18 @@ namespace gfx {
 	void
 	Renderer::makeTextureImage()
 	{
-		// TODO: pre-conds, logging, try-catch
+		// TODO: split into two parts? vectorize member?
+		spdlog::info( "Creating texture image..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpDevice != nullptr );
 		
 		i32 imageWidth;
 		i32 imageHeight;
 		[[maybe_unused]] i32 imageChannels;
 		
+		spdlog::info( "... loading texture image from disk with STB" );
 		auto *pImageData {
 			stbi_load(
 				"../dat/textures/texture.jpeg",
@@ -1303,9 +1309,12 @@ namespace gfx {
 			)
 		};
 		if ( pImageData != nullptr ) {
+			spdlog::info( "... success!" );
+			
 			vk::DeviceSize const imageSize { 4 * static_cast<u32>(imageWidth * imageHeight) };
 			
-			// NOTE: copying from a vk::Buffer instead of using a staging image can be faster on some hardware!
+			spdlog::info( "... creating staging buffer to transfer image to the GPU" );
+			// NOTE: copying from a staging buffer instead of using a staging image can be faster on some hardware!
 			auto stagingBuffer {
 				makeBuffer(
 					vk::BufferUsageFlagBits::eTransferSrc,
@@ -1314,29 +1323,47 @@ namespace gfx {
 				)
 			};
 			
+			spdlog::info( "... mapping staging buffer to host (CPU) memory" );
 			auto *pMappedMemory { stagingBuffer->memory.mapMemory( 0, imageSize ) };
+			spdlog::info( "... copying image data" );
 			std::memcpy( pMappedMemory, pImageData, static_cast<std::size_t>(imageSize) );
+			spdlog::info( "... unmapping memory" );
 			stagingBuffer->memory.unmapMemory();
 			
-			mpTextureImage = std::make_unique<vk::raii::Image>(
-				*mpDevice,
-				vk::ImageCreateInfo {
-					.imageType   = vk::ImageType::e2D,
-					.format      = vk::Format::eR8G8B8A8Srgb,
-					.extent      = vk::Extent3D {
-					                  .width  = static_cast<u32>(imageWidth),
-					                  .height = static_cast<u32>(imageHeight),
-					                  .depth  = 1
-					},
-					.mipLevels   = 1,
-					.arrayLayers = 1,
-					.tiling      = vk::ImageTiling::eOptimal,
-				}
-			);
+			try {
+				// TODO: query & verify eR8G8B8A8Srgb format device support
+				spdlog::info( "... creating Vulkan image" );
+				mpTextureImage = std::make_unique<vk::raii::Image>(
+					*mpDevice,
+					vk::ImageCreateInfo {
+						.imageType     = vk::ImageType::e2D,
+						.format        = vk::Format::eR8G8B8A8Srgb,
+						.extent        = vk::Extent3D {
+						                    .width  = static_cast<u32>( imageWidth  ),
+						                    .height = static_cast<u32>( imageHeight ),
+						                    .depth  = 1
+						                 },
+						.mipLevels     = 1,
+						.arrayLayers   = 1,
+						.samples       = vk::SampleCountFlagBits::e1, // NOTE: for multisampling; only relevant for attachments
+						.tiling        = vk::ImageTiling::eOptimal,   // NOTE: optimal is better for shader; linear for staging images
+						.usage         = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+						.sharingMode   = vk::SharingMode::eExclusive, // NOTE: since only one queue family will use this image
+						.initialLayout = vk::ImageLayout::eUndefined, // NOTE: preinitialized has limited uses (e.g. staging images)
+					}
+				);
+			}
+			catch( vk::SystemError const &e ) {
+				spdlog::error( "Vulkan fFailed to create texture image!" );
+				throw e;
+			}
 			
+			spdlog::info( "... freeing STB image buffer" );
 			stbi_image_free( pImageData );
+			
+			spdlog::info( "... done!" );
 		}
-		else throw std::runtime_error { "STB failed to load image!" };
+		else throw std::runtime_error { "STB failed to load texture image!" };
 	}
 	
 	
