@@ -37,7 +37,7 @@ target_compile_definitions ( ${PROJECT_NAME} PUBLIC GLFW_INCLUDE_VULKAN        )
 
 target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20 ) # Set C++ standard to C++20
 # TODO: target_compile_options     ( ${PROJECT_NAME} PUBLIC "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/permissive->" ) # To help ensure cross-platform compatibility
-target_include_directories ( ${PROJECT_NAME} PUBLIC "src/" ) # Source code
+target_include_directories ( ${PROJECT_NAME} PUBLIC "src/" "include/" ) # Source code + includes
 set_target_properties      ( ${PROJECT_NAME} PROPERTIES CXX_EXTENSIONS OFF ) # For cross-platform compatibility
 target_compile_options     ( ${PROJECT_NAME} PRIVATE
 	-pthread

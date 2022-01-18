@@ -1,5 +1,19 @@
 #include "MyTemplate/info.hpp"
 
+#pragma GCC diagnostic push 
+#pragma GCC diagnostic ignored "-Wall"
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wextra-semi"
+#define STBI_NO_SIMD // temp fix
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/image.h>
+#pragma GCC diagnostic pop
+
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 

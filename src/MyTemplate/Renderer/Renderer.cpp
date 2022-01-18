@@ -6,8 +6,12 @@
 #include "MyTemplate/Renderer/Primitives.hpp"
 #include "vulkan/vulkan_structs.hpp"
 
+#include <stb/image.h>
+
 #include <spdlog/spdlog.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wvolatile"
 #include <glm/common.hpp>
 #include <glm/exponential.hpp>
 #include <glm/geometric.hpp>
@@ -19,6 +23,7 @@
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/gtx/string_cast.hpp>
+#pragma GCC diagnostic pop
 
 #include <iostream> // TEMP
 #include <ranges>
@@ -1280,6 +1285,14 @@ namespace gfx {
 	
 	
 	void
+	Renderer::makeTextureImage()
+	{
+
+	}
+	
+	
+	
+	void
 	Renderer::makeVertexBuffer()
 	{
 		spdlog::info( "Creating vertex buffer..." );
@@ -1632,6 +1645,7 @@ namespace gfx {
 		makeLogicalDevice();
 		makeQueues();
 		makeCommandPools();
+		makeTextureImage();
 		makeVertexBuffer();
 		makeIndexBuffer();
 		makeSyncPrimitives(); // TODO(config): refactor so it is updated whenever framebuffer count changes
