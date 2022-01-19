@@ -55,6 +55,11 @@
 			eMinimalStuttering      ,
 			eMinimalPowerConsumption,
 		}; // end-of-enum-struct: PresentationPriority
+		
+		enum struct CommandType {
+			eTransfer,
+			eGraphics
+		}; // end-of-struct: CommandType
 	} // end-of-namespace: gfx
 
 

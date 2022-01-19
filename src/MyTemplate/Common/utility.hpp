@@ -21,6 +21,9 @@ bool constexpr kIsDebugMode {
 
 bool constexpr kIsVerbose { false }; // TODO: expose to CMake or make a run-time constant set with args
 
+template <typename... T>
+bool constexpr always_false_v { false };
+
 #include <limits>
 #include <concepts>
 

@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <vector>
+#include <functional>
 #include <chrono>
 
 // #include <glm/common.hpp>
@@ -80,6 +81,8 @@ namespace gfx {
 			void                                                    makeSyncPrimitives();
 			void                                                    updateUniformBuffer( u32 bufferIndex );
 			void                                                    initializeData();
+			// member function template(s):
+			template <CommandType> void                             recordCommands( std::function<void(vk::raii::CommandBuffers &)> &&, u32 const bufferCount, vk::CommandBufferUsageFlags const, vk::CommandBufferLevel const ); // TODO: DIPA
 			
 			// structs:
 			struct HostData { // CPU-only

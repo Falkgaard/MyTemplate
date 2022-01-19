@@ -1260,24 +1260,15 @@ namespace gfx {
 	void
 	Renderer::copy( Buffer const &src, Buffer &dst, vk::DeviceSize const size )
 	{
-		spdlog::info( "Copying {} bytes of data from one buffer to another...", size );
-		vk::raii::CommandBuffers commandBuffer(
-			*mpDevice,
-			vk::CommandBufferAllocateInfo {
-				.commandPool        = **mpTransferCommandPool,
-				.level              =   vk::CommandBufferLevel::ePrimary,
-				.commandBufferCount =   1
-			}
+		spdlog::info( "Copying {} bytes of data from source buffer to destination buffer...", size );
+		recordCommands<CommandType::eTransfer>(
+			[&]( vk::raii::CommandBuffers &commandBuffers ) {
+				commandBuffers[0].copyBuffer( *src.handle, *dst.handle, {{.srcOffset=0, .dstOffset=0, .size=size}} );
+			},
+			1, // NOTE: requested command buffer count
+			vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+			vk::CommandBufferLevel::ePrimary
 		);
-		commandBuffer[0].begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-		commandBuffer[0].copyBuffer( *src.handle, *dst.handle, {{.srcOffset=0, .dstOffset=0, .size=size}} );
-		commandBuffer[0].end();
-		vk::SubmitInfo const submitInfo {
-			.commandBufferCount =  1,
-			.pCommandBuffers    = &*commandBuffer[0]
-		};
-		mpTransferQueue->submit( submitInfo );
-		mpTransferQueue->waitIdle(); // TODO(later): use fence instead if allowing concurrent transfers
 	} // end-of-function: Renderer::copy
 	
 	
@@ -1361,7 +1352,7 @@ namespace gfx {
 		spdlog::info( "... loading texture image from disk with STB" );
 		auto *pImageData {
 			stbi_load( // TODO: make a RAII wrapper?
-				"../dat/textures/texture.jpeg",
+				"../dat/textures/metal.jpeg",
 				&imageWidth,
 				&imageHeight,
 				&imageChannels,
@@ -1604,7 +1595,69 @@ namespace gfx {
 		}
 	} // end-of-function: Renderer::makeDescriptorSets
 	
-   
+	
+	
+	template <CommandType T_type>
+	void
+	Renderer::recordCommands( // TODO: DIPA
+		std::function<void(vk::raii::CommandBuffers &)> &&commandBlock ,
+		u32                         const                 bufferCount,
+		vk::CommandBufferUsageFlags const                 usageFlags,
+		vk::CommandBufferLevel      const                 level
+	) 
+	{
+		// TODO: log args info
+		spdlog::info( "... preparing to record command(s)" );
+		
+		vk::raii::CommandPool *pCommandPool;
+		vk::raii::Queue       *pQueue;
+		if      constexpr ( T_type == CommandType::eTransfer ) {
+			pCommandPool = mpTransferCommandPool.get();
+			pQueue       = mpTransferQueue.get();
+		}
+		else if constexpr ( T_type == CommandType::eGraphics ) {
+			pCommandPool = mpGraphicsCommandPool.get();
+			pQueue       = mpGraphicsQueue.get();
+		}
+		else static_assert( always_false_v<decltype(T_type)>, "Unsupported CommandType!" );
+		
+		// Pre-conditions:
+		assert( pCommandPool != nullptr );
+		assert( pQueue       != nullptr );
+		
+		// pre-step:
+		vk::raii::CommandBuffers commandBuffers(
+			*mpDevice,
+			vk::CommandBufferAllocateInfo {
+				.commandPool        = **pCommandPool,
+				.level              =   level,
+				.commandBufferCount =   bufferCount
+			}
+		);
+		for ( auto i{0u}; i<bufferCount; ++i )
+			commandBuffers[i].begin({ .flags = usageFlags });
+		
+		// invoke caller-provided commands:
+		spdlog::info( "... recording command(s)" );
+		std::forward<decltype(commandBlock)>(commandBlock)(commandBuffers);
+		
+		// post-step:
+		spdlog::info( "... submitting command(s)" );
+		for ( auto i{0u}; i<bufferCount; ++i )
+			commandBuffers[i].end();
+		pQueue->submit(
+			vk::SubmitInfo {
+				.commandBufferCount =   bufferCount,
+				.pCommandBuffers    = &*commandBuffers[0]
+			}
+		);
+		pQueue->waitIdle(); // TODO(later): use fence instead if allowing concurrent transfers
+	} // end-of-function: recordCommands
+	// explicit member function template instantiation:
+	template void Renderer::recordCommands<CommandType::eTransfer>( std::function<void(vk::raii::CommandBuffers&)>&&, u32 const, vk::CommandBufferUsageFlags const, vk::CommandBufferLevel const );
+	template void Renderer::recordCommands<CommandType::eGraphics>( std::function<void(vk::raii::CommandBuffers&)>&&, u32 const, vk::CommandBufferUsageFlags const, vk::CommandBufferLevel const );
+	
+	
 	
 	void
 	Renderer::makeCommandBuffers()
