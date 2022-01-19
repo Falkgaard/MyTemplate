@@ -68,6 +68,11 @@
 			bool areSeparate   { false      };
 		}; // end-of-struct: QueueFamilyIndices
 		
+		struct Image {
+			vk::raii::Image         handle;
+			vk::raii::DeviceMemory  memory;
+		}; // end-of-struct: Image
+		
 		struct Buffer {
 			vk::raii::Buffer        handle;
 			vk::raii::DeviceMemory  memory;

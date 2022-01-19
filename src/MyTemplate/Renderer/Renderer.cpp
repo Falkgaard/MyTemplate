@@ -1237,16 +1237,14 @@ namespace gfx {
 		
 		spdlog::info( "... allocating buffer device memory" );
 		auto bufferMemory {
-			vk::raii::DeviceMemory(
-				mpDevice->allocateMemory(
-					{
-						.allocationSize  = requirements.size,
-						.memoryTypeIndex = findMemoryTypeIndex(
-						                      requirements.memoryTypeBits,
-						                      properties
-						                 )
-					}
-				)
+			mpDevice->allocateMemory(
+				{
+					.allocationSize  = requirements.size,
+					.memoryTypeIndex = findMemoryTypeIndex(
+					                      requirements.memoryTypeBits,
+					                      properties
+					                 )
+				}
 			)
 		};
 		
@@ -1284,6 +1282,68 @@ namespace gfx {
 	
 	
 	
+	[[nodiscard]] std::unique_ptr<Image>
+	Renderer::makeImage2D(
+		u32                     const width,
+		u32                     const height,
+		vk::ImageUsageFlags     const usageFlags,
+		vk::MemoryPropertyFlags const properties
+	)
+		// TODO(later): parameterize tiling and format as well, make dimensions 2D vector
+		// TODO: split into two parts? vectorize member?
+	{
+		spdlog::info( "Creating texture image..." );
+		
+		// pre-condition(s):
+		//   shouldn't be null unless the function is called in the wrong order:
+		assert( mpDevice != nullptr );
+		
+		try {
+			// TODO: query & verify eR8G8B8A8Srgb format device support
+			spdlog::info( "... creating Vulkan image" );	
+			auto imageHandle {
+				vk::raii::Image(
+					*mpDevice,
+					vk::ImageCreateInfo {
+						.imageType     = vk::ImageType::e2D,
+						.format        = vk::Format::eR8G8B8A8Srgb,
+						.extent        = vk::Extent3D {
+						                    .width  = static_cast<u32>( width  ),
+						                    .height = static_cast<u32>( height ),
+						                    .depth  = 1
+						                 },
+						.mipLevels     = 1,
+						.arrayLayers   = 1,
+						.samples       = vk::SampleCountFlagBits::e1, // NOTE: for multisampling; only relevant for attachments
+						.tiling        = vk::ImageTiling::eOptimal,   // NOTE: optimal is better for shader; linear for staging images
+						.usage         = usageFlags,
+						.sharingMode   = vk::SharingMode::eExclusive, // NOTE: since only one queue family will use this image
+						.initialLayout = vk::ImageLayout::eUndefined, // NOTE: preinitialized has limited uses (e.g. staging images)
+					}
+				)
+			};
+			spdlog::info( "... allocating image device memory" );
+			auto const memoryRequirements { imageHandle.getMemoryRequirements() };
+			auto imageMemory {
+				mpDevice->allocateMemory(
+					vk::MemoryAllocateInfo {
+						.allocationSize  = memoryRequirements.size,
+						.memoryTypeIndex = findMemoryTypeIndex( memoryRequirements.memoryTypeBits, properties )
+					}
+				)
+			};
+			
+			spdlog::info( "... done!" );
+			return std::make_unique<Image>( Image{ std::move(imageHandle), std::move(imageMemory) } );
+		}
+		catch( vk::SystemError const &e ) {
+			spdlog::error( "Vulkan failed to create texture image! ({})", e.what() );
+			throw std::runtime_error { "Failed to create texture image!" }; // TODO: fallback to a default texture instead (purple?)
+		}	
+	} // end-of-function: Renderer::makeImage2D
+	
+	
+	
 	void
 	Renderer::makeTextureImage()
 	{
@@ -1300,7 +1360,7 @@ namespace gfx {
 		
 		spdlog::info( "... loading texture image from disk with STB" );
 		auto *pImageData {
-			stbi_load(
+			stbi_load( // TODO: make a RAII wrapper?
 				"../dat/textures/texture.jpeg",
 				&imageWidth,
 				&imageHeight,
@@ -1330,41 +1390,22 @@ namespace gfx {
 			spdlog::info( "... unmapping memory" );
 			stagingBuffer->memory.unmapMemory();
 			
-			try {
-				// TODO: query & verify eR8G8B8A8Srgb format device support
-				spdlog::info( "... creating Vulkan image" );
-				mpTextureImage = std::make_unique<vk::raii::Image>(
-					*mpDevice,
-					vk::ImageCreateInfo {
-						.imageType     = vk::ImageType::e2D,
-						.format        = vk::Format::eR8G8B8A8Srgb,
-						.extent        = vk::Extent3D {
-						                    .width  = static_cast<u32>( imageWidth  ),
-						                    .height = static_cast<u32>( imageHeight ),
-						                    .depth  = 1
-						                 },
-						.mipLevels     = 1,
-						.arrayLayers   = 1,
-						.samples       = vk::SampleCountFlagBits::e1, // NOTE: for multisampling; only relevant for attachments
-						.tiling        = vk::ImageTiling::eOptimal,   // NOTE: optimal is better for shader; linear for staging images
-						.usage         = vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-						.sharingMode   = vk::SharingMode::eExclusive, // NOTE: since only one queue family will use this image
-						.initialLayout = vk::ImageLayout::eUndefined, // NOTE: preinitialized has limited uses (e.g. staging images)
-					}
-				);
-			}
-			catch( vk::SystemError const &e ) {
-				spdlog::error( "Vulkan fFailed to create texture image!" );
-				throw e;
-			}
-			
 			spdlog::info( "... freeing STB image buffer" );
 			stbi_image_free( pImageData );
+				
+			mpTextureImage = makeImage2D(
+				static_cast<u32>(imageWidth),
+				static_cast<u32>(imageHeight),
+				vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+				vk::MemoryPropertyFlagBits::eDeviceLocal
+			);
+			
+			// TODO: transfer to image memory 
 			
 			spdlog::info( "... done!" );
 		}
 		else throw std::runtime_error { "STB failed to load texture image!" };
-	}
+	} // end-of-function: makeTextureImage
 	
 	
 	
